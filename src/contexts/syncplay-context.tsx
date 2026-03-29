@@ -67,6 +67,9 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   // Ref to prevent feedback loops: when true, actions originated from server
   const serverCommandInFlight = useRef(false);
 
+  // Tracks item ID we're already playing/loading to prevent PlayQueue re-trigger
+  const playingItemIdRef = useRef<string | null>(null);
+
   // Ping tracking for time offset
   const pingTimestamps = useRef<number[]>([]);
   const serverTimeOffset = useRef(0);
@@ -285,7 +288,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
 
         case "PlayQueue": {
           if (!manager) break;
-          const { Playlist, PlayingItemIndex, StartPositionTicks, IsPlaying } =
+          const { Playlist, PlayingItemIndex, StartPositionTicks } =
             Data;
           if (
             Playlist &&
@@ -293,25 +296,29 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
             PlayingItemIndex != null
           ) {
             const currentItemId = Playlist[PlayingItemIndex]?.ItemId;
+            // Skip if we're already playing/loading this item
             if (
-              currentItemId &&
-              manager.playbackState.currentItem?.Id !== currentItemId
+              !currentItemId ||
+              currentItemId === playingItemIdRef.current ||
+              currentItemId === manager.playbackState.currentItem?.Id
             ) {
-              try {
-                const itemDetails = await fetchMediaDetails(currentItemId);
-                if (itemDetails) {
-                  serverCommandInFlight.current = true;
-                  try {
-                    await manager.play(itemDetails as any, {
-                      startPositionTicks: StartPositionTicks || 0,
-                    });
-                  } finally {
-                    serverCommandInFlight.current = false;
-                  }
+              break;
+            }
+            playingItemIdRef.current = currentItemId;
+            try {
+              const itemDetails = await fetchMediaDetails(currentItemId);
+              if (itemDetails) {
+                serverCommandInFlight.current = true;
+                try {
+                  await manager.play(itemDetails as any, {
+                    startPositionTicks: StartPositionTicks || 0,
+                  });
+                } finally {
+                  serverCommandInFlight.current = false;
                 }
-              } catch (err) {
-                console.error("Failed to start SyncPlay queue item:", err);
               }
+            } catch (err) {
+              console.error("Failed to start SyncPlay queue item:", err);
             }
           }
           break;
@@ -374,6 +381,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
       await api.syncPlayLeaveGroup();
       setIsInGroup(false);
       setCurrentGroup(null);
+      playingItemIdRef.current = null;
       setError(null);
     } catch (err) {
       const message = "Failed to leave group";
@@ -472,6 +480,10 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const setQueue = useCallback(
     async (itemIds: string[], startIndex: number = 0) => {
       try {
+        // Mark the item we're about to play so PlayQueue handler skips it
+        if (itemIds.length > 0) {
+          playingItemIdRef.current = itemIds[startIndex] || itemIds[0];
+        }
         const api = await createSyncPlayApi();
         if (!api) return;
         await api.syncPlaySetNewQueue({

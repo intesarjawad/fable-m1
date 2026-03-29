@@ -83,7 +83,6 @@ export function SyncPlayButton() {
               ? "bg-primary/20 border-primary/40 text-primary"
               : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
           }`}
-          onClick={(e) => e.stopPropagation()}
         >
           <Users className="w-4.5 h-4.5" />
         </button>
