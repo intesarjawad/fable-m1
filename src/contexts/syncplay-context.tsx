@@ -15,24 +15,75 @@ import { usePlaybackContext } from "@/src/playback/context/PlaybackContext";
 import { useAuth } from "@/src/hooks/useAuth";
 import { getDeviceId } from "@/src/lib/device-id";
 import { fetchMediaDetails } from "@/src/actions";
-import {
-  syncPlayCreateGroup as apiCreateGroup,
-  syncPlayJoinGroup as apiJoinGroup,
-  syncPlayLeaveGroup as apiLeaveGroup,
-  syncPlayGetGroups as apiGetGroups,
-  syncPlayUnpause as apiUnpause,
-  syncPlayPause as apiPause,
-  syncPlaySeek as apiSeek,
-  syncPlayStop as apiStop,
-  syncPlaySetNewQueue as apiSetNewQueue,
-  syncPlayNextItem as apiNextItem,
-  syncPlayPreviousItem as apiPreviousItem,
-  syncPlayPing as apiPing,
-  syncPlayBuffering as apiBuffering,
-  syncPlayReady as apiReady,
-  getServerTime,
-} from "@/src/actions/syncplay";
 import { toast } from "sonner";
+
+/**
+ * All SyncPlay API calls go through this proxy to avoid server action hash
+ * issues on redeploy. The proxy route forwards requests to Jellyfin.
+ */
+async function syncProxy(
+  path: string,
+  options: { method?: string; body?: any } = {},
+) {
+  const res = await fetch("/api/syncplay/proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, method: options.method || "POST", body: options.body }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: `${res.status}` }));
+    throw new Error(data.error || `SyncPlay proxy: ${res.status}`);
+  }
+  return res.json();
+}
+
+async function apiCreateGroup(name: string) {
+  return syncProxy("/SyncPlay/New", { body: { GroupName: name } });
+}
+async function apiJoinGroup(id: string) {
+  return syncProxy("/SyncPlay/Join", { body: { GroupId: id } });
+}
+async function apiLeaveGroup() {
+  return syncProxy("/SyncPlay/Leave");
+}
+async function apiGetGroups() {
+  return syncProxy("/SyncPlay/List", { method: "GET" });
+}
+async function apiUnpause() {
+  return syncProxy("/SyncPlay/Unpause");
+}
+async function apiPause() {
+  return syncProxy("/SyncPlay/Pause");
+}
+async function apiSeek(positionTicks: number) {
+  return syncProxy("/SyncPlay/Seek", { body: { PositionTicks: Math.round(positionTicks) } });
+}
+async function apiStop() {
+  return syncProxy("/SyncPlay/Stop");
+}
+async function apiSetNewQueue(ids: string[], position: number, startTicks: number) {
+  return syncProxy("/SyncPlay/SetNewQueue", {
+    body: { PlayingQueue: ids, PlayingItemPosition: position, StartPositionTicks: startTicks },
+  });
+}
+async function apiNextItem(playlistItemId: string) {
+  return syncProxy("/SyncPlay/NextItem", { body: { PlaylistItemId: playlistItemId } });
+}
+async function apiPreviousItem(playlistItemId: string) {
+  return syncProxy("/SyncPlay/PreviousItem", { body: { PlaylistItemId: playlistItemId } });
+}
+async function apiPing(ping: number) {
+  return syncProxy("/SyncPlay/Ping", { body: { Ping: Math.round(ping) } });
+}
+async function apiBuffering(options: any) {
+  return syncProxy("/SyncPlay/Buffering", { body: options });
+}
+async function apiReady(options: any) {
+  return syncProxy("/SyncPlay/Ready", { body: options });
+}
+async function getServerTime() {
+  return syncProxy("/GetUTCTime", { method: "GET" });
+}
 
 const TICKS_PER_MS = 10000;
 
