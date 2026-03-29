@@ -68,6 +68,74 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 
+function SidebarWatchPartyContent() {
+  const { isInGroup, currentGroup, availableGroups, joinGroup, joinWithCode, leaveGroup } = useSyncPlay();
+  const [joinCodeInput, setJoinCodeInput] = useState("");
+  const [isJoining, setIsJoining] = useState(false);
+
+  const handleJoinWithCode = async () => {
+    if (!joinCodeInput.trim() || joinCodeInput.length < 4) return;
+    setIsJoining(true);
+    const success = await joinWithCode(joinCodeInput.trim());
+    if (success) setJoinCodeInput("");
+    setIsJoining(false);
+  };
+
+  if (isInGroup) {
+    return (
+      <>
+        <SidebarMenuSubItem>
+          <div className="px-2 py-1.5">
+            <p className="text-xs font-medium truncate">{currentGroup?.GroupName || "Watch Party"}</p>
+            <p className="text-[10px] text-muted-foreground">{currentGroup?.Participants?.length || 0} watching</p>
+          </div>
+        </SidebarMenuSubItem>
+        <SidebarMenuSubItem>
+          <SidebarMenuSubButton onClick={() => leaveGroup()} className="text-destructive">
+            <LogOut className="h-3 w-3" />
+            <span>Leave</span>
+          </SidebarMenuSubButton>
+        </SidebarMenuSubItem>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {availableGroups.map((group) => (
+        <SidebarMenuSubItem key={group.GroupId}>
+          <SidebarMenuSubButton onClick={() => joinGroup(group.GroupId!)}>
+            <Users className="h-3 w-3" />
+            <span className="truncate">{group.GroupName || "Watch Party"}</span>
+          </SidebarMenuSubButton>
+        </SidebarMenuSubItem>
+      ))}
+      <SidebarMenuSubItem>
+        <div className="flex gap-1 px-1 py-1">
+          <input
+            type="text"
+            placeholder="Code"
+            value={joinCodeInput}
+            onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleJoinWithCode();
+            }}
+            maxLength={4}
+            className="w-16 h-6 text-[10px] font-mono tracking-widest text-center rounded border border-border bg-background/50 px-1 uppercase"
+          />
+          <button
+            onClick={handleJoinWithCode}
+            disabled={isJoining || joinCodeInput.length < 4}
+            className="h-6 px-2 text-[10px] font-medium rounded bg-primary text-primary-foreground disabled:opacity-50"
+          >
+            Join
+          </button>
+        </div>
+      </SidebarMenuSubItem>
+    </>
+  );
+}
+
 export function AppSidebar() {
   const { setOpen, setOpenMobile, isMobile } = useSidebar();
   const router = useRouter();
@@ -295,18 +363,28 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Watch Party indicator */}
-              {(isInGroup || hasActiveParties) && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton className="relative">
-                    <Users className="h-4 w-4" />
-                    <span>
-                      {isInGroup ? "Watch Party" : `${availableGroups.length} party active`}
-                    </span>
-                    <span className={`ml-auto w-2 h-2 rounded-full animate-pulse ${isInGroup ? "bg-primary" : "bg-amber-400"}`} />
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
+              {/* Watch Party */}
+              <SidebarMenuItem>
+                <Collapsible asChild defaultOpen={false} className="group/watchparty">
+                  <div>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton tooltip="Watch Party">
+                        <Users className="h-4 w-4" />
+                        <span>Watch Party</span>
+                        {(isInGroup || hasActiveParties) && (
+                          <span className={`ml-auto w-2 h-2 rounded-full animate-pulse ${isInGroup ? "bg-primary" : "bg-amber-400"}`} />
+                        )}
+                        <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/watchparty:rotate-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        <SidebarWatchPartyContent />
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              </SidebarMenuItem>
 
               {/* Admin Section */}
 
