@@ -2,6 +2,7 @@ import React, { ReactNode } from 'react';
 import { usePlaybackManager } from '../hooks/usePlaybackManager';
 import { PlaybackContext } from './PlaybackContext';
 import { JellyfinPlayer } from '../components/JellyfinPlayer';
+import { SyncPlayProvider } from '@/src/contexts/syncplay-context';
 
 interface PlaybackProviderProps {
     children: ReactNode;
@@ -35,19 +36,16 @@ export const PlaybackProvider: React.FC<PlaybackProviderProps> = ({ children }) 
 
     return (
         <PlaybackContext.Provider value={manager}>
-            {children}
-            
-            <div className={containerCalsses}>
-                 {/* Only render if we have something ensuring not to break layout or if we want to keep state? 
-                    JellyfinPlayer handles hiding internal players, but we want to hide the container.
-                 */}
-                 <JellyfinPlayer 
-                    manager={manager}
-                    className="w-full h-full"
-                 />
-                 
-                {/* Close/Back button could go here if proper UI design isn't inside JellyfinPlayer yet */}
-            </div>
+            <SyncPlayProvider>
+                {children}
+
+                <div className={containerCalsses}>
+                    <JellyfinPlayer
+                        manager={manager}
+                        className="w-full h-full"
+                    />
+                </div>
+            </SyncPlayProvider>
         </PlaybackContext.Provider>
     );
 };
