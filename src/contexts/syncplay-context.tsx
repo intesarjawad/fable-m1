@@ -124,27 +124,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isAuthenticated, serverUrl, token]);
 
-  // Subscribe to SyncPlay WebSocket messages
-  useEffect(() => {
-    const unsubCommand = jellyfinWs.subscribe(
-      "SyncPlayCommand",
-      (data: any) => {
-        handleSyncPlayCommand(data);
-      },
-    );
-
-    const unsubGroupUpdate = jellyfinWs.subscribe(
-      "SyncPlayGroupUpdate",
-      (data: any) => {
-        handleGroupUpdate(data);
-      },
-    );
-
-    return () => {
-      unsubCommand();
-      unsubGroupUpdate();
-    };
-  }, []);
+  // WebSocket subscription — set up after handlers are defined (see below)
 
   // Poll for available groups when not in a group
   useEffect(() => {
@@ -346,13 +326,48 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     [manager],
   );
 
+  // Keep handler refs current to avoid stale closures in WebSocket subscriptions
+  const handleCommandRef = useRef(handleSyncPlayCommand);
+  const handleUpdateRef = useRef(handleGroupUpdate);
+  useEffect(() => {
+    handleCommandRef.current = handleSyncPlayCommand;
+    handleUpdateRef.current = handleGroupUpdate;
+  }, [handleSyncPlayCommand, handleGroupUpdate]);
+
+  // Subscribe to SyncPlay WebSocket messages
+  useEffect(() => {
+    const unsubCommand = jellyfinWs.subscribe(
+      "SyncPlayCommand",
+      (data: any) => {
+        console.log("[SyncPlay] Command received:", data);
+        handleCommandRef.current(data);
+      },
+    );
+
+    const unsubGroupUpdate = jellyfinWs.subscribe(
+      "SyncPlayGroupUpdate",
+      (data: any) => {
+        console.log("[SyncPlay] GroupUpdate received:", data);
+        handleUpdateRef.current(data);
+      },
+    );
+
+    return () => {
+      unsubCommand();
+      unsubGroupUpdate();
+    };
+  }, []);
+
   // --- Public actions ---
 
   const createGroup = useCallback(async (groupName: string) => {
     try {
+      console.log("[SyncPlay] Creating group:", groupName);
       await syncFetch("/SyncPlay/New", { body: { GroupName: groupName } });
+      console.log("[SyncPlay] Group created successfully");
       setError(null);
     } catch (err) {
+      console.error("[SyncPlay] Failed to create group:", err);
       setError("Failed to create group");
       toast.error("Failed to create group");
     }
@@ -384,9 +399,10 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const refreshGroups = useCallback(async () => {
     try {
       const groups = await syncFetch("/SyncPlay/List", { method: "GET" });
+      console.log("[SyncPlay] Available groups:", groups);
       setAvailableGroups(groups || []);
-    } catch {
-      // Silent
+    } catch (err) {
+      console.error("[SyncPlay] Failed to fetch groups:", err);
     }
   }, [syncFetch]);
 
