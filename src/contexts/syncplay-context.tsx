@@ -90,6 +90,12 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const playingItemIdRef = useRef<string | null>(null);
   const groupJoinedAt = useRef<number>(0);
   const enabledAt = useRef<number>(0);
+  const isInGroupRef = useRef(false);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isInGroupRef.current = isInGroup;
+  }, [isInGroup]);
   const timeSyncReady = useRef(false);
   const queuedCommand = useRef<any>(null);
 
@@ -112,7 +118,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
 
     ts.onUpdate = (offset, ping) => {
       // Report ping to server
-      if (isInGroup) {
+      if (isInGroupRef.current) {
         apiPing(Math.round(ping)).catch(() => {});
       }
 
@@ -131,19 +137,26 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Create/update PlaybackCore when manager changes
+  // Keep a stable ref to the manager so PlaybackCore doesn't recreate on every render
+  const managerRef = useRef(manager);
   useEffect(() => {
-    if (!timeSyncRef.current || !manager) return;
+    managerRef.current = manager;
+  }, [manager]);
+
+  // Create PlaybackCore once (uses managerRef to always access current manager)
+  useEffect(() => {
+    if (!timeSyncRef.current) return;
 
     const playerActions = {
-      pause: () => manager.pause(),
-      unpause: () => manager.unpause(),
-      seek: (ticks: number) => manager.seek(ticks),
-      stop: () => manager.stop(),
-      setPlaybackRate: (rate: number) => manager.setPlaybackRate(rate),
+      pause: () => managerRef.current?.pause(),
+      unpause: () => managerRef.current?.unpause(),
+      seek: (ticks: number) => managerRef.current?.seek(ticks),
+      stop: () => managerRef.current?.stop(),
+      setPlaybackRate: (rate: number) => managerRef.current?.setPlaybackRate(rate),
       getCurrentTimeTicks: () =>
-        Math.round(manager.playbackState.currentTime * 1000 * TICKS_PER_MS),
-      isPlaying: () => !manager.playbackState.paused && !!manager.playbackState.currentItem,
+        Math.round((managerRef.current?.playbackState?.currentTime || 0) * 1000 * TICKS_PER_MS),
+      isPlaying: () =>
+        !managerRef.current?.playbackState?.paused && !!managerRef.current?.playbackState?.currentItem,
     };
 
     const core = new PlaybackCore(timeSyncRef.current, playerActions);
@@ -152,18 +165,24 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     return () => {
       core.destroy();
     };
-  }, [manager]);
+  }, []); // Only create once
 
-  // Feed timeupdate events to the sync correction engine
+  // Feed position to sync correction engine via interval (not useEffect on currentTime
+  // which causes infinite re-render loops when the engine adjusts playback rate/position)
   useEffect(() => {
     if (!isInGroup || !manager) return;
 
-    const { currentTime } = manager.playbackState;
-    playbackCoreRef.current?.onTimeUpdate(
-      Date.now(),
-      currentTime * 1000, // seconds → milliseconds
-    );
-  }, [isInGroup, manager?.playbackState?.currentTime]);
+    const syncInterval = setInterval(() => {
+      const { currentTime, paused } = manager.playbackState;
+      if (paused) return;
+      playbackCoreRef.current?.onTimeUpdate(
+        Date.now(),
+        currentTime * 1000,
+      );
+    }, 2000); // Check every 2 seconds
+
+    return () => clearInterval(syncInterval);
+  }, [isInGroup, manager]);
 
   // --- WebSocket ---
 
@@ -208,7 +227,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
 
   const handleSyncPlayCommand = useCallback(
     (data: any) => {
-      if (!isInGroup) return;
+      if (!isInGroupRef.current) return;
 
       // Reject commands emitted before SyncPlay was enabled
       if (data.EmittedAt) {
@@ -224,7 +243,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
 
       playbackCoreRef.current?.applyCommand(data);
     },
-    [isInGroup],
+    [],
   );
 
   const handleGroupUpdate = useCallback(
