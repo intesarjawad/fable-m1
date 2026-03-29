@@ -10,6 +10,7 @@ import React, {
   useMemo,
 } from "react";
 import { jellyfinWs } from "@/src/lib/jellyfin-ws";
+import { TimeSync, PlaybackCore } from "@/src/lib/syncplay-engine";
 import { usePlaybackContext } from "@/src/playback/context/PlaybackContext";
 import { useAuth } from "@/src/hooks/useAuth";
 import { getDeviceId } from "@/src/lib/device-id";
@@ -29,8 +30,11 @@ import {
   syncPlayPing as apiPing,
   syncPlayBuffering as apiBuffering,
   syncPlayReady as apiReady,
+  getServerTime,
 } from "@/src/actions/syncplay";
 import { toast } from "sonner";
+
+const TICKS_PER_MS = 10000;
 
 interface GroupInfoDto {
   GroupId?: string;
@@ -69,9 +73,7 @@ interface SyncPlayContextType {
   setQueue: (itemIds: string[], startIndex?: number) => Promise<void>;
 }
 
-const SyncPlayContext = createContext<SyncPlayContextType | undefined>(
-  undefined,
-);
+const SyncPlayContext = createContext<SyncPlayContextType | undefined>(undefined);
 
 export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const manager = usePlaybackContext();
@@ -85,19 +87,86 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const [availableGroups, setAvailableGroups] = useState<VisibleGroup[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const serverCommandInFlight = useRef(false);
   const playingItemIdRef = useRef<string | null>(null);
-  const serverTimeOffset = useRef(0);
   const groupJoinedAt = useRef<number>(0);
+  const enabledAt = useRef<number>(0);
+  const timeSyncReady = useRef(false);
+  const queuedCommand = useRef<any>(null);
 
-  // Pending group creation — registered in GroupJoined handler where we have the actual GroupId
+  // Pending group creation for metadata registration
   const pendingGroupCreation = useRef<{
     groupName: string;
     isPublic: boolean;
     resolve: (code: string | null) => void;
   } | null>(null);
 
-  // Connect WebSocket when authenticated
+  // --- Time Sync + PlaybackCore ---
+
+  const timeSyncRef = useRef<TimeSync | null>(null);
+  const playbackCoreRef = useRef<PlaybackCore | null>(null);
+
+  // Create TimeSync instance
+  useEffect(() => {
+    const ts = new TimeSync(getServerTime);
+    timeSyncRef.current = ts;
+
+    ts.onUpdate = (offset, ping) => {
+      // Report ping to server
+      if (isInGroup) {
+        apiPing(Math.round(ping)).catch(() => {});
+      }
+
+      // Mark time sync as ready — process queued command
+      if (!timeSyncReady.current) {
+        timeSyncReady.current = true;
+        if (queuedCommand.current) {
+          playbackCoreRef.current?.applyCommand(queuedCommand.current);
+          queuedCommand.current = null;
+        }
+      }
+    };
+
+    return () => {
+      ts.stop();
+    };
+  }, []);
+
+  // Create/update PlaybackCore when manager changes
+  useEffect(() => {
+    if (!timeSyncRef.current || !manager) return;
+
+    const playerActions = {
+      pause: () => manager.pause(),
+      unpause: () => manager.unpause(),
+      seek: (ticks: number) => manager.seek(ticks),
+      stop: () => manager.stop(),
+      setPlaybackRate: (rate: number) => manager.setPlaybackRate(rate),
+      getCurrentTimeTicks: () =>
+        Math.round(manager.playbackState.currentTime * 1000 * TICKS_PER_MS),
+      isPlaying: () => !manager.playbackState.paused && !!manager.playbackState.currentItem,
+    };
+
+    const core = new PlaybackCore(timeSyncRef.current, playerActions);
+    playbackCoreRef.current = core;
+
+    return () => {
+      core.destroy();
+    };
+  }, [manager]);
+
+  // Feed timeupdate events to the sync correction engine
+  useEffect(() => {
+    if (!isInGroup || !manager) return;
+
+    const { currentTime } = manager.playbackState;
+    playbackCoreRef.current?.onTimeUpdate(
+      Date.now(),
+      currentTime * 1000, // seconds → milliseconds
+    );
+  }, [isInGroup, manager?.playbackState?.currentTime]);
+
+  // --- WebSocket ---
+
   useEffect(() => {
     if (!isAuthenticated || !serverUrl || !token) return;
 
@@ -111,56 +180,51 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isAuthenticated, serverUrl, token]);
 
+  // --- Buffering reporting ---
+
+  useEffect(() => {
+    if (!isInGroup || !manager) return;
+
+    const { isBuffering, currentTime, paused, currentItem } = manager.playbackState;
+    const ts = timeSyncRef.current;
+    if (!ts) return;
+
+    const nowRemote = new Date(ts.localToRemote(Date.now())).toISOString();
+    const options = {
+      When: nowRemote,
+      PositionTicks: Math.round(currentTime * 1000 * TICKS_PER_MS),
+      IsPlaying: !paused,
+      PlaylistItemId: currentItem?.Id || "",
+    };
+
+    if (isBuffering) {
+      apiBuffering(options).catch(() => {});
+    } else {
+      apiReady(options).catch(() => {});
+    }
+  }, [isInGroup, manager?.playbackState?.isBuffering]);
+
   // --- Command handlers ---
 
   const handleSyncPlayCommand = useCallback(
     (data: any) => {
-      if (!manager) return;
+      if (!isInGroup) return;
 
-      const { Command, PositionTicks, When } = data;
-
-      const executeCommand = () => {
-        serverCommandInFlight.current = true;
-        try {
-          switch (Command) {
-            case "Unpause":
-              manager.unpause();
-              break;
-            case "Pause":
-              manager.pause();
-              break;
-            case "Stop":
-              if (Date.now() - groupJoinedAt.current < 5000) {
-                break;
-              }
-              manager.stop();
-              break;
-            case "Seek":
-              if (PositionTicks != null) {
-                manager.seek(PositionTicks);
-              }
-              break;
-          }
-        } finally {
-          serverCommandInFlight.current = false;
-        }
-      };
-
-      if (When && (Command === "Unpause" || Command === "Seek")) {
-        const targetTime = new Date(When).getTime();
-        const adjustedNow = Date.now() + serverTimeOffset.current;
-        const delay = Math.max(0, targetTime - adjustedNow);
-
-        if (delay > 0) {
-          setTimeout(executeCommand, delay);
-        } else {
-          executeCommand();
-        }
-      } else {
-        executeCommand();
+      // Reject commands emitted before SyncPlay was enabled
+      if (data.EmittedAt) {
+        const emittedAt = new Date(data.EmittedAt).getTime();
+        if (emittedAt < enabledAt.current) return;
       }
+
+      // Queue if time sync not ready yet
+      if (!timeSyncReady.current) {
+        queuedCommand.current = data;
+        return;
+      }
+
+      playbackCoreRef.current?.applyCommand(data);
     },
-    [manager],
+    [isInGroup],
   );
 
   const handleGroupUpdate = useCallback(
@@ -170,11 +234,19 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
       switch (Type) {
         case "GroupJoined": {
           groupJoinedAt.current = Date.now();
+          enabledAt.current = Data?.LastUpdatedAt
+            ? new Date(Data.LastUpdatedAt).getTime()
+            : Date.now();
+          timeSyncReady.current = false;
+          queuedCommand.current = null;
           setIsInGroup(true);
           setCurrentGroup(Data);
           setError(null);
 
-          // If we have a pending group creation, register metadata now that we have the GroupId
+          // Start time sync
+          timeSyncRef.current?.forceUpdate();
+
+          // Register group metadata if this was a creation
           const pending = pendingGroupCreation.current;
           if (pending && Data?.GroupId) {
             pendingGroupCreation.current = null;
@@ -189,8 +261,8 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
               }),
             })
               .then((res) => res.json())
-              .then((data) => {
-                const code = data.joinCode || null;
+              .then((d) => {
+                const code = d.joinCode || null;
                 setCurrentJoinCode(code);
                 pending.resolve(code);
               })
@@ -206,14 +278,8 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
           setCurrentGroup(null);
           setCurrentJoinCode(null);
           playingItemIdRef.current = null;
-          // Clean up group metadata
-          if (Data?.GroupId || currentGroup?.GroupId) {
-            fetch("/api/syncplay/groups", {
-              method: "DELETE",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ groupId: Data?.GroupId || currentGroup?.GroupId }),
-            }).catch(() => {});
-          }
+          timeSyncReady.current = false;
+          playbackCoreRef.current?.destroy();
           toast.info("Left watch party");
           break;
 
@@ -221,9 +287,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
           setCurrentGroup((prev) => {
             if (!prev) return prev;
             const participants = [...(prev.Participants || [])];
-            if (!participants.includes(Data)) {
-              participants.push(Data);
-            }
+            if (!participants.includes(Data)) participants.push(Data);
             return { ...prev, Participants: participants };
           });
           break;
@@ -233,9 +297,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
             if (!prev) return prev;
             return {
               ...prev,
-              Participants: (prev.Participants || []).filter(
-                (p) => p !== Data,
-              ),
+              Participants: (prev.Participants || []).filter((p) => p !== Data),
             };
           });
           break;
@@ -256,14 +318,9 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
             try {
               const itemDetails = await fetchMediaDetails(currentItemId);
               if (itemDetails) {
-                serverCommandInFlight.current = true;
-                try {
-                  await manager.play(itemDetails as any, {
-                    startPositionTicks: StartPositionTicks || 0,
-                  });
-                } finally {
-                  serverCommandInFlight.current = false;
-                }
+                await manager.play(itemDetails as any, {
+                  startPositionTicks: StartPositionTicks || 0,
+                });
               }
             } catch (err) {
               console.error("Failed to start SyncPlay queue item:", err);
@@ -288,7 +345,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
           break;
       }
     },
-    [manager, currentGroup],
+    [manager, userId],
   );
 
   // --- WebSocket subscriptions ---
@@ -313,19 +370,16 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // --- Polling for visible groups ---
+  // --- Group polling ---
 
   const fetchVisibleGroups = useCallback(async () => {
     try {
-      // Get all Jellyfin SyncPlay groups
       const jellyfinGroups: GroupInfoDto[] = (await apiGetGroups()) || [];
-
       if (jellyfinGroups.length === 0) {
         setAvailableGroups([]);
         return;
       }
 
-      // Get our metadata for visibility filtering
       const metaResponse = await fetch(
         `/api/syncplay/groups?userId=${encodeURIComponent(userId)}`,
       );
@@ -335,8 +389,6 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
         metaGroups[g.groupId] = g;
       }
 
-      // Merge: only show groups that are public, unlocked, or have no metadata
-      // (no metadata = created from OSD "New group" or external client = treat as public)
       const visible: VisibleGroup[] = [];
       for (const jg of jellyfinGroups) {
         const meta = metaGroups[jg.GroupId || ""];
@@ -349,76 +401,31 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
               joinCode: meta.isUnlocked ? meta.joinCode : undefined,
             });
           }
-          // Private + not unlocked = invisible
         } else {
-          // No metadata — legacy or external group, show as public
           visible.push({ ...jg, isPublic: true, isUnlocked: true });
         }
       }
 
       setAvailableGroups(visible);
     } catch {
-      // Silent fail
+      // Silent
     }
   }, [userId]);
 
   useEffect(() => {
     if (isInGroup || !isAuthenticated) return;
-
     fetchVisibleGroups();
     const interval = setInterval(fetchVisibleGroups, 15000);
     return () => clearInterval(interval);
   }, [isInGroup, isAuthenticated, fetchVisibleGroups]);
-
-  // --- Ping ---
-
-  useEffect(() => {
-    if (!isInGroup) return;
-
-    const pingInterval = setInterval(async () => {
-      try {
-        await apiPing(Math.round(serverTimeOffset.current));
-      } catch {
-        // Silent
-      }
-    }, 10000);
-
-    return () => clearInterval(pingInterval);
-  }, [isInGroup]);
-
-  // --- Buffering ---
-
-  useEffect(() => {
-    if (!isInGroup || !manager) return;
-
-    const { isBuffering, currentTime, paused, currentItem } =
-      manager.playbackState;
-
-    const options = {
-      When: new Date().toISOString(),
-      PositionTicks: Math.round(currentTime * 10000000),
-      IsPlaying: !paused,
-      PlaylistItemId: currentItem?.Id || "",
-    };
-
-    if (isBuffering) {
-      apiBuffering(options).catch(() => {});
-    } else {
-      apiReady(options).catch(() => {});
-    }
-  }, [isInGroup, manager?.playbackState?.isBuffering]);
 
   // --- Public actions ---
 
   const createGroup = useCallback(
     async (groupName: string, isPublic: boolean): Promise<string | null> => {
       try {
-        // Set up the pending creation — the GroupJoined WebSocket handler
-        // will register metadata once we have the actual GroupId
         const codePromise = new Promise<string | null>((resolve) => {
           pendingGroupCreation.current = { groupName, isPublic, resolve };
-
-          // Timeout fallback in case GroupJoined never arrives
           setTimeout(() => {
             if (pendingGroupCreation.current?.resolve === resolve) {
               pendingGroupCreation.current = null;
@@ -427,17 +434,11 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
           }, 10000);
         });
 
-        // Create the SyncPlay group on Jellyfin
         await apiCreateGroup(groupName);
-
-        // Wait for the GroupJoined handler to register metadata and return the code
-        const joinCode = await codePromise;
-        setError(null);
-        return joinCode;
+        return await codePromise;
       } catch (err) {
         console.error("[SyncPlay] Failed to create group:", err);
         pendingGroupCreation.current = null;
-        setError("Failed to create group");
         toast.error("Failed to create group");
         return null;
       }
@@ -448,43 +449,30 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const joinGroup = useCallback(async (groupId: string) => {
     try {
       await apiJoinGroup(groupId);
-      setError(null);
-    } catch (err) {
-      console.error("[SyncPlay] Failed to join group:", err);
-      setError("Failed to join group");
+    } catch {
       toast.error("Failed to join group");
     }
   }, []);
 
-  const joinWithCode = useCallback(
-    async (code: string): Promise<boolean> => {
-      try {
-        // Validate code with our metadata API
-        const res = await fetch("/api/syncplay/groups", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ joinCode: code }),
-        });
-
-        if (!res.ok) {
-          toast.error("Invalid join code");
-          return false;
-        }
-
-        const { groupId } = await res.json();
-
-        // Join the actual Jellyfin SyncPlay group
-        await apiJoinGroup(groupId);
-        setError(null);
-        return true;
-      } catch (err) {
-        console.error("[SyncPlay] Failed to join with code:", err);
-        toast.error("Failed to join group");
+  const joinWithCode = useCallback(async (code: string): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/syncplay/groups", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ joinCode: code }),
+      });
+      if (!res.ok) {
+        toast.error("Invalid join code");
         return false;
       }
-    },
-    [],
-  );
+      const { groupId } = await res.json();
+      await apiJoinGroup(groupId);
+      return true;
+    } catch {
+      toast.error("Failed to join group");
+      return false;
+    }
+  }, []);
 
   const leaveGroup = useCallback(async () => {
     try {
@@ -493,10 +481,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
       setCurrentGroup(null);
       setCurrentJoinCode(null);
       playingItemIdRef.current = null;
-      setError(null);
-    } catch (err) {
-      console.error("[SyncPlay] Failed to leave group:", err);
-      setError("Failed to leave group");
+    } catch {
       toast.error("Failed to leave group");
     }
   }, []);
@@ -505,34 +490,33 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     await fetchVisibleGroups();
   }, [fetchVisibleGroups]);
 
+  // SyncPlay actions — these go to the SERVER, not the local player
   const syncPlay = useCallback(async () => {
-    if (serverCommandInFlight.current) return;
     try { await apiUnpause(); } catch { toast.error("SyncPlay: failed to play"); }
   }, []);
 
   const syncPause = useCallback(async () => {
-    if (serverCommandInFlight.current) return;
     try { await apiPause(); } catch { toast.error("SyncPlay: failed to pause"); }
   }, []);
 
   const syncSeek = useCallback(async (positionTicks: number) => {
-    if (serverCommandInFlight.current) return;
     try { await apiSeek(positionTicks); } catch { toast.error("SyncPlay: failed to seek"); }
   }, []);
 
   const syncStop = useCallback(async () => {
-    if (serverCommandInFlight.current) return;
     try { await apiStop(); } catch { toast.error("SyncPlay: failed to stop"); }
   }, []);
 
   const syncNext = useCallback(async () => {
-    if (serverCommandInFlight.current) return;
-    try { await apiNextItem(manager?.playbackState?.currentItem?.Id || ""); } catch { toast.error("SyncPlay: failed to skip"); }
+    try {
+      await apiNextItem(manager?.playbackState?.currentItem?.Id || "");
+    } catch { toast.error("SyncPlay: failed to skip"); }
   }, [manager]);
 
   const syncPrevious = useCallback(async () => {
-    if (serverCommandInFlight.current) return;
-    try { await apiPreviousItem(manager?.playbackState?.currentItem?.Id || ""); } catch { toast.error("SyncPlay: failed to go back"); }
+    try {
+      await apiPreviousItem(manager?.playbackState?.currentItem?.Id || "");
+    } catch { toast.error("SyncPlay: failed to go back"); }
   }, [manager]);
 
   const setQueue = useCallback(
@@ -551,23 +535,9 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(
     () => ({
-      isInGroup,
-      currentGroup,
-      currentJoinCode,
-      availableGroups,
-      error,
-      createGroup,
-      joinGroup,
-      joinWithCode,
-      leaveGroup,
-      refreshGroups,
-      syncPlay,
-      syncPause,
-      syncSeek,
-      syncStop,
-      syncNext,
-      syncPrevious,
-      setQueue,
+      isInGroup, currentGroup, currentJoinCode, availableGroups, error,
+      createGroup, joinGroup, joinWithCode, leaveGroup, refreshGroups,
+      syncPlay, syncPause, syncSeek, syncStop, syncNext, syncPrevious, setQueue,
     }),
     [
       isInGroup, currentGroup, currentJoinCode, availableGroups, error,
@@ -577,40 +547,23 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <SyncPlayContext.Provider value={value}>
-      {children}
-    </SyncPlayContext.Provider>
+    <SyncPlayContext.Provider value={value}>{children}</SyncPlayContext.Provider>
   );
 }
 
 const noopAsync = async () => {};
-const noopAsyncNull = async () => null;
-const noopAsyncBool = async () => false;
 
 const defaultSyncPlayContext: SyncPlayContextType = {
-  isInGroup: false,
-  currentGroup: null,
-  currentJoinCode: null,
-  availableGroups: [],
-  error: null,
-  createGroup: noopAsyncNull as any,
-  joinGroup: noopAsync,
-  joinWithCode: noopAsyncBool,
-  leaveGroup: noopAsync,
-  refreshGroups: noopAsync,
-  syncPlay: noopAsync,
-  syncPause: noopAsync,
-  syncSeek: noopAsync,
-  syncStop: noopAsync,
-  syncNext: noopAsync,
-  syncPrevious: noopAsync,
-  setQueue: noopAsync,
+  isInGroup: false, currentGroup: null, currentJoinCode: null,
+  availableGroups: [], error: null,
+  createGroup: async () => null, joinGroup: noopAsync,
+  joinWithCode: async () => false, leaveGroup: noopAsync,
+  refreshGroups: noopAsync, syncPlay: noopAsync, syncPause: noopAsync,
+  syncSeek: noopAsync, syncStop: noopAsync, syncNext: noopAsync,
+  syncPrevious: noopAsync, setQueue: noopAsync,
 };
 
 export function useSyncPlay() {
   const context = useContext(SyncPlayContext);
-  if (context === undefined) {
-    return defaultSyncPlayContext;
-  }
-  return context;
+  return context === undefined ? defaultSyncPlayContext : context;
 }

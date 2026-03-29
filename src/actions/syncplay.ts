@@ -99,6 +99,14 @@ export async function syncPlayPreviousItem(playlistItemId: string) {
   });
 }
 
+// Time sync
+export async function getServerTime(): Promise<{
+  RequestReceptionTime: string;
+  ResponseTransmissionTime: string;
+}> {
+  return syncPlayFetch("/GetUTCTime", { method: "GET" });
+}
+
 // Sync state
 export async function syncPlayPing(ping: number) {
   return syncPlayFetch("/SyncPlay/Ping", { body: { Ping: ping } });
