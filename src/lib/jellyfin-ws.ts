@@ -44,6 +44,7 @@ export class JellyfinWebSocket {
         const messageType = message.MessageType;
         if (messageType === "SyncPlayCommand" || messageType === "SyncPlayGroupUpdate") {
           console.log("[JellyfinWS] SyncPlay message:", messageType, message.Data);
+          console.log("[JellyfinWS] Has subscribers for", messageType, ":", this.subscribers.has(messageType), "count:", this.subscribers.get(messageType)?.size);
         }
         if (messageType && this.subscribers.has(messageType)) {
           this.subscribers.get(messageType)!.forEach((handler) => {
@@ -112,9 +113,11 @@ export class JellyfinWebSocket {
       this.subscribers.set(messageType, new Set());
     }
     this.subscribers.get(messageType)!.add(handler);
+    console.log(`[JellyfinWS] Subscribed to ${messageType}, total handlers: ${this.subscribers.get(messageType)!.size}`);
 
     return () => {
-      this.subscribers.get(messageType)?.delete(handler);
+      const deleted = this.subscribers.get(messageType)?.delete(handler);
+      console.log(`[JellyfinWS] Unsubscribed from ${messageType}, deleted: ${deleted}, remaining: ${this.subscribers.get(messageType)?.size}`);
     };
   }
 
