@@ -625,7 +625,12 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const syncSeek = useCallback(async (positionTicks: number) => {
-    try { await apiSeek(positionTicks); } catch { toast.error("SyncPlay: failed to seek"); }
+    try {
+      await apiSeek(positionTicks);
+    } catch (err) {
+      console.error("[SyncPlay] Seek failed:", err);
+      toast.error("SyncPlay: failed to seek");
+    }
   }, []);
 
   const syncStop = useCallback(async () => {

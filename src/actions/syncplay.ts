@@ -4,9 +4,15 @@ import { StoreAuthData } from "./store/store-auth-data";
 
 async function getAuth() {
   const authData = await StoreAuthData.get();
-  if (!authData) throw new Error("Not authenticated");
+  if (!authData) {
+    console.error("[SyncPlay] getAuth: no auth data in cookie");
+    throw new Error("Not authenticated");
+  }
   const token = (authData.user as any)?.AccessToken;
-  if (!token) throw new Error("No access token");
+  if (!token) {
+    console.error("[SyncPlay] getAuth: no access token in auth data");
+    throw new Error("No access token");
+  }
   return { serverUrl: authData.serverUrl, token };
 }
 
@@ -27,15 +33,25 @@ async function syncPlayFetch(
   });
 
   if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`SyncPlay ${path}: ${response.status} ${text}`);
+    const errorText = await response.text().catch(() => "");
+    console.error(`[SyncPlay] ${path} failed: ${response.status} ${errorText}`);
+    throw new Error(`SyncPlay ${path}: ${response.status} ${errorText}`);
   }
 
-  if (response.status === 204 || response.headers.get("content-length") === "0") {
+  if (response.status === 204) {
     return null;
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text || text.length === 0) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 // Group management
@@ -65,7 +81,9 @@ export async function syncPlayPause() {
 }
 
 export async function syncPlaySeek(positionTicks: number) {
-  return syncPlayFetch("/SyncPlay/Seek", { body: { PositionTicks: positionTicks } });
+  // Jellyfin expects PositionTicks as an integer
+  const ticks = Math.round(positionTicks);
+  return syncPlayFetch("/SyncPlay/Seek", { body: { PositionTicks: ticks } });
 }
 
 export async function syncPlayStop() {
