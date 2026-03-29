@@ -78,6 +78,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const serverCommandInFlight = useRef(false);
   const playingItemIdRef = useRef<string | null>(null);
   const serverTimeOffset = useRef(0);
+  const groupJoinedAt = useRef<number>(0);
 
   // Connect WebSocket when authenticated (WebSocket is not subject to CORS)
   useEffect(() => {
@@ -112,6 +113,12 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
               manager.pause();
               break;
             case "Stop":
+              // Server sends Stop immediately after group creation (empty queue).
+              // Ignore Stop commands within 5s of joining to avoid killing playback.
+              if (Date.now() - groupJoinedAt.current < 5000) {
+                console.log("[SyncPlay] Ignoring Stop — too close to group join");
+                break;
+              }
               manager.stop();
               break;
             case "Seek":
@@ -148,6 +155,8 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
 
       switch (Type) {
         case "GroupJoined":
+          console.log("[SyncPlay] Setting isInGroup=true, group:", Data?.GroupName);
+          groupJoinedAt.current = Date.now();
           setIsInGroup(true);
           setCurrentGroup(Data);
           setError(null);
@@ -246,11 +255,17 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubCommand = jellyfinWs.subscribe(
       "SyncPlayCommand",
-      (data: any) => handleCommandRef.current(data),
+      (data: any) => {
+        console.log("[SyncPlay] Command handler called:", data?.Command);
+        handleCommandRef.current(data);
+      },
     );
     const unsubGroupUpdate = jellyfinWs.subscribe(
       "SyncPlayGroupUpdate",
-      (data: any) => handleUpdateRef.current(data),
+      (data: any) => {
+        console.log("[SyncPlay] GroupUpdate handler called:", data?.Type, "isInGroup will be:", data?.Type === "GroupJoined");
+        handleUpdateRef.current(data);
+      },
     );
     return () => {
       unsubCommand();
