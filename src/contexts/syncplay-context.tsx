@@ -345,7 +345,8 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
       // 2. The command's EmittedAt is after enabledAt (not stale)
       // 3. PlaybackCore exists
 
-      // Reject commands emitted before SyncPlay was enabled for this session
+      console.log("[SyncPlay] Command:", data.Command, "PositionTicks:", data.PositionTicks, "When:", data.When);
+
       if (data.EmittedAt) {
         const emittedAt = new Date(data.EmittedAt).getTime();
         if (emittedAt < enabledAt.current) return;
@@ -447,14 +448,17 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
 
         case "PlayQueue": {
           if (!manager) break;
+          console.log("[SyncPlay] PlayQueue received:", JSON.stringify(Data).substring(0, 200));
           const { Playlist, PlayingItemIndex, StartPositionTicks, Reason } = Data;
           if (Playlist?.length > 0 && PlayingItemIndex != null) {
             const currentItemId = Playlist[PlayingItemIndex]?.ItemId;
+            console.log("[SyncPlay] PlayQueue item:", currentItemId, "playing:", playingItemIdRef.current, "current:", manager.playbackState.currentItem?.Id);
             if (
               !currentItemId ||
               currentItemId === playingItemIdRef.current ||
               currentItemId === manager.playbackState.currentItem?.Id
             ) {
+              console.log("[SyncPlay] PlayQueue skipped — already playing this item");
               break;
             }
             playingItemIdRef.current = currentItemId;
@@ -482,13 +486,14 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
                   }
                 }
 
+                console.log("[SyncPlay] Starting playback at position:", estimatedPosition);
                 await manager.play(itemDetails as any, {
                   startPositionTicks: estimatedPosition,
                 });
+                console.log("[SyncPlay] manager.play() resolved");
 
-                // Report Ready after playback initializes so the server
-                // knows our position. Don't pause — just let it play.
                 setTimeout(() => {
+                  console.log("[SyncPlay] Reporting Ready after playback init");
                   reportReady();
                 }, 1500);
               }
