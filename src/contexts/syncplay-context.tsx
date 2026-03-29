@@ -13,8 +13,23 @@ import { jellyfinWs } from "@/src/lib/jellyfin-ws";
 import { usePlaybackContext } from "@/src/playback/context/PlaybackContext";
 import { useAuth } from "@/src/hooks/useAuth";
 import { getDeviceId } from "@/src/lib/device-id";
-import { StoreAuthData } from "@/src/actions/store/store-auth-data";
 import { fetchMediaDetails } from "@/src/actions";
+import {
+  syncPlayCreateGroup as apiCreateGroup,
+  syncPlayJoinGroup as apiJoinGroup,
+  syncPlayLeaveGroup as apiLeaveGroup,
+  syncPlayGetGroups as apiGetGroups,
+  syncPlayUnpause as apiUnpause,
+  syncPlayPause as apiPause,
+  syncPlaySeek as apiSeek,
+  syncPlayStop as apiStop,
+  syncPlaySetNewQueue as apiSetNewQueue,
+  syncPlayNextItem as apiNextItem,
+  syncPlayPreviousItem as apiPreviousItem,
+  syncPlayPing as apiPing,
+  syncPlayBuffering as apiBuffering,
+  syncPlayReady as apiReady,
+} from "@/src/actions/syncplay";
 import { toast } from "sonner";
 
 interface GroupInfoDto {
@@ -50,32 +65,6 @@ const SyncPlayContext = createContext<SyncPlayContextType | undefined>(
   undefined,
 );
 
-// Direct fetch helper for Jellyfin SyncPlay API
-async function jellyfinFetch(
-  serverUrl: string,
-  token: string,
-  path: string,
-  options: { method?: string; body?: any } = {},
-) {
-  const baseUrl = serverUrl.replace(/\/+$/, "");
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: options.method || "POST",
-    headers: {
-      Authorization: `MediaBrowser Token="${token}"`,
-      "Content-Type": "application/json",
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-  if (!response.ok) {
-    throw new Error(`Jellyfin ${path}: ${response.status} ${response.statusText}`);
-  }
-  // Some endpoints return 204 No Content
-  if (response.status === 204 || response.headers.get("content-length") === "0") {
-    return null;
-  }
-  return response.json();
-}
-
 export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const manager = usePlaybackContext();
   const { serverUrl, user, isAuthenticated } = useAuth();
@@ -89,28 +78,8 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const serverCommandInFlight = useRef(false);
   const playingItemIdRef = useRef<string | null>(null);
   const serverTimeOffset = useRef(0);
-  const pingTimestamps = useRef<number[]>([]);
 
-  // Stable refs for serverUrl/token so callbacks don't go stale
-  const serverUrlRef = useRef(serverUrl);
-  const tokenRef = useRef(token);
-  useEffect(() => {
-    serverUrlRef.current = serverUrl;
-    tokenRef.current = token;
-  }, [serverUrl, token]);
-
-  // Helper that uses current refs
-  const syncFetch = useCallback(
-    (path: string, options: { method?: string; body?: any } = {}) => {
-      if (!serverUrlRef.current || !tokenRef.current) {
-        return Promise.reject(new Error("Not authenticated"));
-      }
-      return jellyfinFetch(serverUrlRef.current, tokenRef.current, path, options);
-    },
-    [],
-  );
-
-  // Connect WebSocket when authenticated
+  // Connect WebSocket when authenticated (WebSocket is not subject to CORS)
   useEffect(() => {
     if (!isAuthenticated || !serverUrl || !token) return;
 
@@ -124,69 +93,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isAuthenticated, serverUrl, token]);
 
-  // WebSocket subscription — set up after handlers are defined (see below)
-
-  // Poll for available groups when not in a group
-  useEffect(() => {
-    if (isInGroup || !isAuthenticated || !serverUrl || !token) return;
-
-    const pollGroups = async () => {
-      try {
-        const groups = await syncFetch("/SyncPlay/List", { method: "GET" });
-        setAvailableGroups(groups || []);
-      } catch {
-        // Silent fail on poll
-      }
-    };
-
-    pollGroups();
-    const interval = setInterval(pollGroups, 15000);
-    return () => clearInterval(interval);
-  }, [isInGroup, isAuthenticated, serverUrl, token, syncFetch]);
-
-  // Ping interval when in group
-  useEffect(() => {
-    if (!isInGroup) return;
-
-    const pingInterval = setInterval(async () => {
-      try {
-        const sendTime = Date.now();
-        await syncFetch("/SyncPlay/Ping", {
-          body: { Ping: Math.round(serverTimeOffset.current) },
-        });
-        const roundTrip = Date.now() - sendTime;
-        pingTimestamps.current.push(roundTrip);
-        if (pingTimestamps.current.length > 5) {
-          pingTimestamps.current.shift();
-        }
-      } catch {
-        // Silent fail
-      }
-    }, 10000);
-
-    return () => clearInterval(pingInterval);
-  }, [isInGroup, syncFetch]);
-
-  // Report buffering state
-  useEffect(() => {
-    if (!isInGroup || !manager) return;
-
-    const { isBuffering, currentTime, paused, currentItem } =
-      manager.playbackState;
-
-    const requestBody = {
-      When: new Date().toISOString(),
-      PositionTicks: Math.round(currentTime * 10000000),
-      IsPlaying: !paused,
-      PlaylistItemId: currentItem?.Id || "",
-    };
-
-    if (isBuffering) {
-      syncFetch("/SyncPlay/Buffering", { body: requestBody }).catch(() => {});
-    } else {
-      syncFetch("/SyncPlay/Ready", { body: requestBody }).catch(() => {});
-    }
-  }, [isInGroup, manager?.playbackState?.isBuffering]);
+  // --- Command handlers ---
 
   const handleSyncPlayCommand = useCallback(
     (data: any) => {
@@ -250,6 +157,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
         case "GroupLeft":
           setIsInGroup(false);
           setCurrentGroup(null);
+          playingItemIdRef.current = null;
           toast.info("Left watch party");
           break;
 
@@ -326,7 +234,8 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     [manager],
   );
 
-  // Keep handler refs current to avoid stale closures in WebSocket subscriptions
+  // --- WebSocket subscriptions (use refs to avoid stale closures) ---
+
   const handleCommandRef = useRef(handleSyncPlayCommand);
   const handleUpdateRef = useRef(handleGroupUpdate);
   useEffect(() => {
@@ -334,137 +243,178 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     handleUpdateRef.current = handleGroupUpdate;
   }, [handleSyncPlayCommand, handleGroupUpdate]);
 
-  // Subscribe to SyncPlay WebSocket messages
   useEffect(() => {
     const unsubCommand = jellyfinWs.subscribe(
       "SyncPlayCommand",
-      (data: any) => {
-        console.log("[SyncPlay] Command received:", data);
-        handleCommandRef.current(data);
-      },
+      (data: any) => handleCommandRef.current(data),
     );
-
     const unsubGroupUpdate = jellyfinWs.subscribe(
       "SyncPlayGroupUpdate",
-      (data: any) => {
-        console.log("[SyncPlay] GroupUpdate received:", data);
-        handleUpdateRef.current(data);
-      },
+      (data: any) => handleUpdateRef.current(data),
     );
-
     return () => {
       unsubCommand();
       unsubGroupUpdate();
     };
   }, []);
 
-  // --- Public actions ---
+  // --- Polling for groups when not in one ---
+
+  useEffect(() => {
+    if (isInGroup || !isAuthenticated) return;
+
+    const pollGroups = async () => {
+      try {
+        const groups = await apiGetGroups();
+        setAvailableGroups(groups || []);
+      } catch {
+        // Silent fail
+      }
+    };
+
+    pollGroups();
+    const interval = setInterval(pollGroups, 15000);
+    return () => clearInterval(interval);
+  }, [isInGroup, isAuthenticated]);
+
+  // --- Ping when in group ---
+
+  useEffect(() => {
+    if (!isInGroup) return;
+
+    const pingInterval = setInterval(async () => {
+      try {
+        await apiPing(Math.round(serverTimeOffset.current));
+      } catch {
+        // Silent fail
+      }
+    }, 10000);
+
+    return () => clearInterval(pingInterval);
+  }, [isInGroup]);
+
+  // --- Report buffering state ---
+
+  useEffect(() => {
+    if (!isInGroup || !manager) return;
+
+    const { isBuffering, currentTime, paused, currentItem } =
+      manager.playbackState;
+
+    const options = {
+      When: new Date().toISOString(),
+      PositionTicks: Math.round(currentTime * 10000000),
+      IsPlaying: !paused,
+      PlaylistItemId: currentItem?.Id || "",
+    };
+
+    if (isBuffering) {
+      apiBuffering(options).catch(() => {});
+    } else {
+      apiReady(options).catch(() => {});
+    }
+  }, [isInGroup, manager?.playbackState?.isBuffering]);
+
+  // --- Public actions (all go through server actions) ---
 
   const createGroup = useCallback(async (groupName: string) => {
     try {
-      console.log("[SyncPlay] Creating group:", groupName);
-      await syncFetch("/SyncPlay/New", { body: { GroupName: groupName } });
-      console.log("[SyncPlay] Group created successfully");
+      await apiCreateGroup(groupName);
       setError(null);
     } catch (err) {
       console.error("[SyncPlay] Failed to create group:", err);
       setError("Failed to create group");
       toast.error("Failed to create group");
     }
-  }, [syncFetch]);
+  }, []);
 
   const joinGroup = useCallback(async (groupId: string) => {
     try {
-      await syncFetch("/SyncPlay/Join", { body: { GroupId: groupId } });
+      await apiJoinGroup(groupId);
       setError(null);
     } catch (err) {
+      console.error("[SyncPlay] Failed to join group:", err);
       setError("Failed to join group");
       toast.error("Failed to join group");
     }
-  }, [syncFetch]);
+  }, []);
 
   const leaveGroup = useCallback(async () => {
     try {
-      await syncFetch("/SyncPlay/Leave");
+      await apiLeaveGroup();
       setIsInGroup(false);
       setCurrentGroup(null);
       playingItemIdRef.current = null;
       setError(null);
     } catch (err) {
+      console.error("[SyncPlay] Failed to leave group:", err);
       setError("Failed to leave group");
       toast.error("Failed to leave group");
     }
-  }, [syncFetch]);
+  }, []);
 
   const refreshGroups = useCallback(async () => {
     try {
-      const groups = await syncFetch("/SyncPlay/List", { method: "GET" });
-      console.log("[SyncPlay] Available groups:", groups);
+      const groups = await apiGetGroups();
       setAvailableGroups(groups || []);
-    } catch (err) {
-      console.error("[SyncPlay] Failed to fetch groups:", err);
+    } catch {
+      // Silent
     }
-  }, [syncFetch]);
+  }, []);
 
   const syncPlay = useCallback(async () => {
     if (serverCommandInFlight.current) return;
     try {
-      await syncFetch("/SyncPlay/Unpause");
+      await apiUnpause();
     } catch {
       toast.error("SyncPlay: failed to play");
     }
-  }, [syncFetch]);
+  }, []);
 
   const syncPause = useCallback(async () => {
     if (serverCommandInFlight.current) return;
     try {
-      await syncFetch("/SyncPlay/Pause");
+      await apiPause();
     } catch {
       toast.error("SyncPlay: failed to pause");
     }
-  }, [syncFetch]);
+  }, []);
 
   const syncSeek = useCallback(async (positionTicks: number) => {
     if (serverCommandInFlight.current) return;
     try {
-      await syncFetch("/SyncPlay/Seek", {
-        body: { PositionTicks: positionTicks },
-      });
+      await apiSeek(positionTicks);
     } catch {
       toast.error("SyncPlay: failed to seek");
     }
-  }, [syncFetch]);
+  }, []);
 
   const syncStop = useCallback(async () => {
     if (serverCommandInFlight.current) return;
     try {
-      await syncFetch("/SyncPlay/Stop");
+      await apiStop();
     } catch {
       toast.error("SyncPlay: failed to stop");
     }
-  }, [syncFetch]);
+  }, []);
 
   const syncNext = useCallback(async () => {
     if (serverCommandInFlight.current) return;
     try {
-      await syncFetch("/SyncPlay/NextItem", {
-        body: { PlaylistItemId: manager?.playbackState?.currentItem?.Id || "" },
-      });
+      await apiNextItem(manager?.playbackState?.currentItem?.Id || "");
     } catch {
       toast.error("SyncPlay: failed to skip");
     }
-  }, [syncFetch, manager]);
+  }, [manager]);
 
   const syncPrevious = useCallback(async () => {
     if (serverCommandInFlight.current) return;
     try {
-      await syncFetch("/SyncPlay/PreviousItem", {
-        body: { PlaylistItemId: manager?.playbackState?.currentItem?.Id || "" },
-      });
+      await apiPreviousItem(manager?.playbackState?.currentItem?.Id || "");
     } catch {
       toast.error("SyncPlay: failed to go back");
     }
-  }, [syncFetch, manager]);
+  }, [manager]);
 
   const setQueue = useCallback(
     async (itemIds: string[], startIndex: number = 0) => {
@@ -472,18 +422,12 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
         if (itemIds.length > 0) {
           playingItemIdRef.current = itemIds[startIndex] || itemIds[0];
         }
-        await syncFetch("/SyncPlay/SetNewQueue", {
-          body: {
-            PlayingQueue: itemIds,
-            PlayingItemPosition: startIndex,
-            StartPositionTicks: 0,
-          },
-        });
+        await apiSetNewQueue(itemIds, startIndex, 0);
       } catch {
         toast.error("SyncPlay: failed to set queue");
       }
     },
-    [syncFetch],
+    [],
   );
 
   const value = useMemo(

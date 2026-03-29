@@ -402,10 +402,14 @@ export function MediaActions({
 
         <Button
           variant="outline"
-          onClick={() => {
+          onClick={async () => {
             if (media) {
               onBeforePlay?.();
-              // Start playback immediately — don't block on group creation
+              // Create group and set queue first, then start playback
+              // Server actions are fast (same network), and the server sends
+              // a Stop command on group creation before queue is set
+              await syncPlay.createGroup(media.Name || "Watch Party");
+              await syncPlay.setQueue([media.Id!]);
               play({
                 id: media.Id!,
                 name: media.Name!,
@@ -413,10 +417,6 @@ export function MediaActions({
                 resumePositionTicks: 0,
                 selectedVersion: selectedVersion,
                 audioStreamIndex: selectedAudioStreamIndex,
-              });
-              // Create group and set queue in background
-              syncPlay.createGroup(media.Name || "Watch Party").then(() => {
-                syncPlay.setQueue([media.Id!]);
               });
             }
           }}
