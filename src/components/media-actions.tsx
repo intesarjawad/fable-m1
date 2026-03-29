@@ -40,6 +40,7 @@ import { useIsMobile } from "../hooks/use-mobile";
 import { DolbyDigital, DolbyTrueHd, DolbyVision, DtsHd } from "./icons/codecs";
 import { UserPolicy } from "@jellyfin/sdk/lib/generated-client/models";
 import { useSyncPlay } from "@/src/contexts/syncplay-context";
+import { toast } from "sonner";
 
 interface MediaActionsProps {
   movie?: JellyfinItem;
@@ -405,10 +406,11 @@ export function MediaActions({
           onClick={async () => {
             if (media) {
               onBeforePlay?.();
-              // Create group and set queue first, then start playback
-              // Server actions are fast (same network), and the server sends
-              // a Stop command on group creation before queue is set
-              await syncPlay.createGroup(media.Name || "Watch Party");
+              // Create private group by default, set queue, then start playback
+              const joinCode = await syncPlay.createGroup(
+                media.Name || "Watch Party",
+                false,
+              );
               await syncPlay.setQueue([media.Id!]);
               play({
                 id: media.Id!,
@@ -418,6 +420,15 @@ export function MediaActions({
                 selectedVersion: selectedVersion,
                 audioStreamIndex: selectedAudioStreamIndex,
               });
+              if (joinCode) {
+                toast(`Share code to invite others: ${joinCode}`, {
+                  duration: 10000,
+                  action: {
+                    label: "Copy",
+                    onClick: () => navigator.clipboard.writeText(joinCode),
+                  },
+                });
+              }
             }
           }}
           className="gap-2 w-full sm:w-auto justify-center sm:justify-start"

@@ -77,7 +77,8 @@ export function AppSidebar() {
   const [isLoading, setIsLoading] = useState(true);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const isAdmin = Boolean(user?.Policy?.IsAdministrator);
-  const { isInGroup } = useSyncPlay();
+  const { isInGroup, availableGroups } = useSyncPlay();
+  const hasActiveParties = availableGroups.length > 0;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -409,6 +410,11 @@ export function AppSidebar() {
                         <span className="flex items-center gap-1 text-primary">
                           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                           Watch Party
+                        </span>
+                      ) : hasActiveParties ? (
+                        <span className="flex items-center gap-1 text-amber-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          {availableGroups.length} party active
                         </span>
                       ) : (
                         "User Account"
