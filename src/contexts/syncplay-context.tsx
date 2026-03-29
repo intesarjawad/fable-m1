@@ -486,17 +486,11 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
                   startPositionTicks: estimatedPosition,
                 });
 
-                // After playback starts, pause and report Ready.
-                // The server will coordinate when everyone should unpause.
-                // Use 1.5s delay to let the player initialize video/audio.
-                const PLAYBACK_INIT_DELAY_MS = 1500;
+                // Report Ready after playback initializes so the server
+                // knows our position. Don't pause — just let it play.
                 setTimeout(() => {
-                  const m = managerRef.current;
-                  if (m) {
-                    m.pause();
-                    reportReady();
-                  }
-                }, PLAYBACK_INIT_DELAY_MS);
+                  reportReady();
+                }, 1500);
               }
             } catch (err) {
               console.error("Failed to start SyncPlay queue item:", err);

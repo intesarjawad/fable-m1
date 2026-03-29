@@ -321,14 +321,10 @@ export class PlaybackCore {
 
     const doSeek = () => {
       this.player.seek(positionTicks);
-      // Pause after seek so the ready handshake can coordinate unpause
-      this.player.pause();
-      // Disable sync correction after seek — the lastCommand's position
-      // is stale and would cause the engine to seek back. Sync re-enables
-      // on the next Unpause command.
+      // Don't pause after seek — just seek and keep playing.
+      // The sync correction engine will handle drift on the next Unpause.
       this.syncEnabled = false;
       this.onCommandExecuted?.("Seek");
-      // Notify the context so it can report Ready to the server
       this.onSeekComplete?.();
     };
 
