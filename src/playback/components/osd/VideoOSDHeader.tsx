@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import { PlaybackContextValue } from "@/src/playback/hooks/usePlaybackManager";
 import { SettingsMenu } from "../SettingsMenu";
@@ -20,6 +20,15 @@ export const VideoOSDHeader: React.FC<VideoOSDHeaderProps> = ({
   onBack,
   onControlsClick,
 }) => {
+  const [syncPlayOpen, setSyncPlayOpen] = useState(false);
+
+  // Close menu when OSD hides
+  useEffect(() => {
+    if (!isVisible) {
+      setSyncPlayOpen(false);
+    }
+  }, [isVisible]);
+
   return (
     <header
       className={`flex items-center justify-between transition-transform duration-300 ${isVisible ? "translate-y-0" : "-translate-y-full"}`}
@@ -57,7 +66,10 @@ export const VideoOSDHeader: React.FC<VideoOSDHeaderProps> = ({
         </div>
       </div>
       <div className="flex items-center gap-4">
-        <SyncPlayButton />
+        <SyncPlayButton
+          open={syncPlayOpen}
+          onOpenChange={setSyncPlayOpen}
+        />
         <SettingsMenu manager={manager} isVisible={isVisible} />
       </div>
     </header>
