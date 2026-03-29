@@ -116,7 +116,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
               // Server sends Stop immediately after group creation (empty queue).
               // Ignore Stop commands within 5s of joining to avoid killing playback.
               if (Date.now() - groupJoinedAt.current < 5000) {
-                console.log("[SyncPlay] Ignoring Stop — too close to group join");
+                // Ignore — server sends Stop on empty queue during group setup
                 break;
               }
               manager.stop();
@@ -155,7 +155,6 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
 
       switch (Type) {
         case "GroupJoined":
-          console.log("[SyncPlay] Setting isInGroup=true, group:", Data?.GroupName);
           groupJoinedAt.current = Date.now();
           setIsInGroup(true);
           setCurrentGroup(Data);
@@ -256,14 +255,12 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     const unsubCommand = jellyfinWs.subscribe(
       "SyncPlayCommand",
       (data: any) => {
-        console.log("[SyncPlay] Command handler called:", data?.Command);
         handleCommandRef.current(data);
       },
     );
     const unsubGroupUpdate = jellyfinWs.subscribe(
       "SyncPlayGroupUpdate",
       (data: any) => {
-        console.log("[SyncPlay] GroupUpdate handler called:", data?.Type, "isInGroup will be:", data?.Type === "GroupJoined");
         handleUpdateRef.current(data);
       },
     );

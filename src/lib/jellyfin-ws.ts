@@ -33,7 +33,6 @@ export class JellyfinWebSocket {
     this.socket = new WebSocket(url);
 
     this.socket.onopen = () => {
-      console.log("[JellyfinWS] Connected to", url.replace(/api_key=[^&]+/, "api_key=***"));
       this.reconnectDelay = 1000;
       this.startKeepAlive();
     };
@@ -42,10 +41,6 @@ export class JellyfinWebSocket {
       try {
         const message = JSON.parse(event.data);
         const messageType = message.MessageType;
-        if (messageType === "SyncPlayCommand" || messageType === "SyncPlayGroupUpdate") {
-          console.log("[JellyfinWS] SyncPlay message:", messageType, message.Data);
-          console.log("[JellyfinWS] Has subscribers for", messageType, ":", this.subscribers.has(messageType), "count:", this.subscribers.get(messageType)?.size);
-        }
         if (messageType && this.subscribers.has(messageType)) {
           this.subscribers.get(messageType)!.forEach((handler) => {
             handler(message.Data);
@@ -56,16 +51,15 @@ export class JellyfinWebSocket {
       }
     };
 
-    this.socket.onclose = (event) => {
-      console.log("[JellyfinWS] Closed:", event.code, event.reason);
+    this.socket.onclose = () => {
       this.stopKeepAlive();
       if (!this.intentionalClose) {
         this.scheduleReconnect();
       }
     };
 
-    this.socket.onerror = (event) => {
-      console.error("[JellyfinWS] Error:", event);
+    this.socket.onerror = () => {
+      // onclose will fire after this — reconnect handled there
     };
   }
 
@@ -113,11 +107,8 @@ export class JellyfinWebSocket {
       this.subscribers.set(messageType, new Set());
     }
     this.subscribers.get(messageType)!.add(handler);
-    console.log(`[JellyfinWS] Subscribed to ${messageType}, total handlers: ${this.subscribers.get(messageType)!.size}`);
-
     return () => {
-      const deleted = this.subscribers.get(messageType)?.delete(handler);
-      console.log(`[JellyfinWS] Unsubscribed from ${messageType}, deleted: ${deleted}, remaining: ${this.subscribers.get(messageType)?.size}`);
+      this.subscribers.get(messageType)?.delete(handler);
     };
   }
 

@@ -28,8 +28,6 @@ export function SyncPlayButton({ open, onOpenChange }: SyncPlayButtonProps) {
     refreshGroups,
   } = useSyncPlay();
 
-  console.log("[SyncPlayButton] render — isInGroup:", isInGroup, "currentGroup:", currentGroup?.GroupName, "availableGroups:", availableGroups.length);
-
   const [isCreating, setIsCreating] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
