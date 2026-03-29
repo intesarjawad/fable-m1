@@ -159,6 +159,9 @@ export class PlaybackCore {
   private lastSyncTime = 0;
   private syncAttempts = 0;
 
+  // Callbacks
+  onSeekComplete?: () => void;
+
   // Sync correction settings (defaults from official client)
   enableSyncCorrection = false;
   useSpeedToSync = true;
@@ -284,6 +287,12 @@ export class PlaybackCore {
 
     const doSeek = () => {
       this.player.seek(positionTicks);
+      // Disable sync correction after seek — the lastCommand's position
+      // is stale and would cause the engine to seek back. Sync re-enables
+      // on the next Unpause command.
+      this.syncEnabled = false;
+      // Also call the onSeekComplete callback so the context can report Ready
+      this.onSeekComplete?.();
     };
 
     if (whenLocal > now) {

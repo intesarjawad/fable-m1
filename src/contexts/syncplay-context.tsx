@@ -87,6 +87,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const [availableGroups, setAvailableGroups] = useState<VisibleGroup[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const managerRef = useRef(manager);
   const playingItemIdRef = useRef<string | null>(null);
   const groupJoinedAt = useRef<number>(0);
   const enabledAt = useRef<number>(0);
@@ -105,6 +106,22 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     isPublic: boolean;
     resolve: (code: string | null) => void;
   } | null>(null);
+
+  // Helper to report our current position to the server
+  const reportReady = useCallback(() => {
+    const ts = timeSyncRef.current;
+    const m = managerRef.current;
+    if (!ts || !m) return;
+
+    const { currentTime, paused, currentItem } = m.playbackState;
+    const nowRemote = new Date(ts.localToRemote(Date.now())).toISOString();
+    apiReady({
+      When: nowRemote,
+      PositionTicks: Math.round(currentTime * 1000 * TICKS_PER_MS),
+      IsPlaying: !paused,
+      PlaylistItemId: currentItem?.Id || "",
+    }).catch(() => {});
+  }, []);
 
   // --- Time Sync + PlaybackCore ---
 
@@ -137,8 +154,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Keep a stable ref to the manager so PlaybackCore doesn't recreate on every render
-  const managerRef = useRef(manager);
+  // Keep manager ref current
   useEffect(() => {
     managerRef.current = manager;
   }, [manager]);
@@ -161,6 +177,11 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
 
     const core = new PlaybackCore(timeSyncRef.current, playerActions);
     playbackCoreRef.current = core;
+
+    // Report Ready after seek completes so the server knows our new position
+    core.onSeekComplete = () => {
+      reportReady();
+    };
 
     return () => {
       core.destroy();
@@ -340,6 +361,13 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
                 await manager.play(itemDetails as any, {
                   startPositionTicks: StartPositionTicks || 0,
                 });
+                // After playback starts, pause immediately and report Ready.
+                // The server will coordinate when everyone should unpause.
+                // (Matches official client: scheduleReadyRequestOnPlaybackStart)
+                setTimeout(() => {
+                  manager.pause();
+                  reportReady();
+                }, 1000);
               }
             } catch (err) {
               console.error("Failed to start SyncPlay queue item:", err);
