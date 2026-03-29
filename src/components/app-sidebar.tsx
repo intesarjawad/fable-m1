@@ -295,8 +295,20 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              {/* Watch Party indicator */}
+              {(isInGroup || hasActiveParties) && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton className="relative">
+                    <Users className="h-4 w-4" />
+                    <span>
+                      {isInGroup ? "Watch Party" : `${availableGroups.length} party active`}
+                    </span>
+                    <span className={`ml-auto w-2 h-2 rounded-full animate-pulse ${isInGroup ? "bg-primary" : "bg-amber-400"}`} />
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
               {/* Admin Section */}
-              {/* Migrate this to json config  */}
 
               {isAdmin && (
                 <Collapsible
@@ -405,21 +417,7 @@ export function AppSidebar() {
                     <span className="truncate font-semibold">
                       {user?.Name || "User"}
                     </span>
-                    <span className="truncate text-xs">
-                      {isInGroup ? (
-                        <span className="flex items-center gap-1 text-primary">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                          Watch Party
-                        </span>
-                      ) : hasActiveParties ? (
-                        <span className="flex items-center gap-1 text-amber-400">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                          {availableGroups.length} party active
-                        </span>
-                      ) : (
-                        "User Account"
-                      )}
-                    </span>
+                    <span className="truncate text-xs">User Account</span>
                   </div>
                   <ChevronUp className="ml-auto size-4" />
                 </SidebarMenuButton>

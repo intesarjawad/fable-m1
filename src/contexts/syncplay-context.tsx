@@ -90,6 +90,13 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const serverTimeOffset = useRef(0);
   const groupJoinedAt = useRef<number>(0);
 
+  // Pending group creation — registered in GroupJoined handler where we have the actual GroupId
+  const pendingGroupCreation = useRef<{
+    groupName: string;
+    isPublic: boolean;
+    resolve: (code: string | null) => void;
+  } | null>(null);
+
   // Connect WebSocket when authenticated
   useEffect(() => {
     if (!isAuthenticated || !serverUrl || !token) return;
@@ -161,13 +168,38 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
       const { Type, Data } = data;
 
       switch (Type) {
-        case "GroupJoined":
+        case "GroupJoined": {
           groupJoinedAt.current = Date.now();
           setIsInGroup(true);
           setCurrentGroup(Data);
           setError(null);
-          toast.success(`Joined: ${Data?.GroupName || "Watch Party"}`);
+
+          // If we have a pending group creation, register metadata now that we have the GroupId
+          const pending = pendingGroupCreation.current;
+          if (pending && Data?.GroupId) {
+            pendingGroupCreation.current = null;
+            fetch("/api/syncplay/groups", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                groupId: Data.GroupId,
+                groupName: pending.groupName,
+                isPublic: pending.isPublic,
+                creatorUserId: userId,
+              }),
+            })
+              .then((res) => res.json())
+              .then((data) => {
+                const code = data.joinCode || null;
+                setCurrentJoinCode(code);
+                pending.resolve(code);
+              })
+              .catch(() => pending.resolve(null));
+          } else {
+            toast.success(`Joined: ${Data?.GroupName || "Watch Party"}`);
+          }
           break;
+        }
 
         case "GroupLeft":
           setIsInGroup(false);
@@ -381,42 +413,36 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
   const createGroup = useCallback(
     async (groupName: string, isPublic: boolean): Promise<string | null> => {
       try {
+        // Set up the pending creation — the GroupJoined WebSocket handler
+        // will register metadata once we have the actual GroupId
+        const codePromise = new Promise<string | null>((resolve) => {
+          pendingGroupCreation.current = { groupName, isPublic, resolve };
+
+          // Timeout fallback in case GroupJoined never arrives
+          setTimeout(() => {
+            if (pendingGroupCreation.current?.resolve === resolve) {
+              pendingGroupCreation.current = null;
+              resolve(null);
+            }
+          }, 10000);
+        });
+
         // Create the SyncPlay group on Jellyfin
         await apiCreateGroup(groupName);
 
-        // Wait briefly for GroupJoined WebSocket to give us the group ID
-        await new Promise((r) => setTimeout(r, 500));
-
-        // Register metadata with our API for privacy
-        const groupId = currentGroup?.GroupId;
-        if (groupId) {
-          const res = await fetch("/api/syncplay/groups", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              groupId,
-              groupName,
-              isPublic,
-              creatorUserId: userId,
-            }),
-          });
-          const data = await res.json();
-          const joinCode = data.joinCode || null;
-          setCurrentJoinCode(joinCode);
-          setError(null);
-          return joinCode;
-        }
-
+        // Wait for the GroupJoined handler to register metadata and return the code
+        const joinCode = await codePromise;
         setError(null);
-        return null;
+        return joinCode;
       } catch (err) {
         console.error("[SyncPlay] Failed to create group:", err);
+        pendingGroupCreation.current = null;
         setError("Failed to create group");
         toast.error("Failed to create group");
         return null;
       }
     },
-    [userId, currentGroup],
+    [userId],
   );
 
   const joinGroup = useCallback(async (groupId: string) => {
