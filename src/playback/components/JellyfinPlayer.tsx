@@ -10,6 +10,7 @@ import {
 import { Player } from "../types";
 import { VideoOSD } from "./VideoOSD";
 import { SubtitleDisplay } from "./SubtitleDisplay";
+import { useSyncPlayGuard } from "../hooks/useSyncPlayGuard";
 
 interface JellyfinPlayerProps {
   className?: string;
@@ -28,6 +29,7 @@ export const JellyfinPlayer: React.FC<JellyfinPlayerProps> = ({
 }) => {
   const localManager = usePlaybackManager();
   const manager = propManager || localManager;
+  const guard = useSyncPlayGuard();
 
   const { playbackState } = manager;
   const [cursorVisible, setCursorVisible] = useState(true);
@@ -120,11 +122,11 @@ export const JellyfinPlayer: React.FC<JellyfinPlayerProps> = ({
       switch (e.key) {
         case "ArrowLeft":
           e.preventDefault();
-          manager.seek(Math.max(0, currentTime - 10) * 10000000);
+          guard.seek(Math.max(0, currentTime - 10) * 10000000);
           break;
         case "ArrowRight":
           e.preventDefault();
-          manager.seek(Math.min(duration, currentTime + 10) * 10000000);
+          guard.seek(Math.min(duration, currentTime + 10) * 10000000);
           break;
         case "ArrowUp":
           e.preventDefault();
@@ -136,12 +138,12 @@ export const JellyfinPlayer: React.FC<JellyfinPlayerProps> = ({
           break;
         case " ":
           e.preventDefault();
-          if (paused) manager.unpause();
-          else manager.pause();
+          if (paused) guard.play();
+          else guard.pause();
           break;
         case "Escape":
           e.preventDefault();
-          manager.stop();
+          guard.stop();
           break;
       }
     };
@@ -177,6 +179,12 @@ export const JellyfinPlayer: React.FC<JellyfinPlayerProps> = ({
           onBufferedChange={(buffered) => {
             manager.reportState({ buffered });
           }}
+          onBufferingStart={() => {
+            manager.reportState({ isBuffering: true });
+          }}
+          onBufferingEnd={() => {
+            manager.reportState({ isBuffering: false });
+          }}
           onEnded={() => {
             manager.reportState({ isEnded: true });
             manager.next();
@@ -205,13 +213,13 @@ export const JellyfinPlayer: React.FC<JellyfinPlayerProps> = ({
           <PlaybackControls
             playbackState={manager.playbackState}
             onPlayPause={() =>
-              manager.playbackState.paused ? manager.unpause() : manager.pause()
+              manager.playbackState.paused ? guard.play() : guard.pause()
             }
-            onSeek={manager.seek}
+            onSeek={guard.seek}
             onVolumeChange={manager.setVolume}
             onToggleMute={manager.toggleMute}
-            onNext={manager.next}
-            onPrevious={manager.previous}
+            onNext={guard.next}
+            onPrevious={guard.previous}
           />
         </div>
       )}

@@ -63,6 +63,7 @@ import {
   FastForward,
 } from "lucide-react";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
+import { useSyncPlay } from "@/src/contexts/syncplay-context";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -76,6 +77,7 @@ export function AppSidebar() {
   const [isLoading, setIsLoading] = useState(true);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const isAdmin = Boolean(user?.Policy?.IsAdministrator);
+  const { isInGroup } = useSyncPlay();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -402,7 +404,16 @@ export function AppSidebar() {
                     <span className="truncate font-semibold">
                       {user?.Name || "User"}
                     </span>
-                    <span className="truncate text-xs">User Account</span>
+                    <span className="truncate text-xs">
+                      {isInGroup ? (
+                        <span className="flex items-center gap-1 text-primary">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                          Watch Party
+                        </span>
+                      ) : (
+                        "User Account"
+                      )}
+                    </span>
                   </div>
                   <ChevronUp className="ml-auto size-4" />
                 </SidebarMenuButton>

@@ -16,6 +16,7 @@ import { VideoOSDTransport } from "./osd/VideoOSDTransport";
 import { VideoOSDTimeline } from "./osd/VideoOSDTimeline";
 import { Maximize } from "lucide-react";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
+import { useSyncPlayGuard } from "../hooks/useSyncPlayGuard";
 
 interface VideoOSDProps {
   manager: PlaybackContextValue;
@@ -25,6 +26,7 @@ interface VideoOSDProps {
 const dateObject = Date.now();
 
 export const VideoOSD: React.FC<VideoOSDProps> = ({ manager }) => {
+  const guard = useSyncPlayGuard();
   const { playbackState } = manager;
   const {
     paused,
@@ -201,7 +203,7 @@ export const VideoOSD: React.FC<VideoOSDProps> = ({ manager }) => {
 
   const handleScrubEnd = (val: number) => {
     if (isScrubbing) {
-      manager.seek(val * 10000000);
+      guard.seek(val * 10000000);
       setScrubbingValue(null);
     }
     setIsScrubbing(false);
@@ -212,7 +214,7 @@ export const VideoOSD: React.FC<VideoOSDProps> = ({ manager }) => {
     const onGlobalMouseUp = () => {
       if (isScrubbing) {
         if (scrubbingValue !== null) {
-          manager.seek(scrubbingValue * 10000000);
+          guard.seek(scrubbingValue * 10000000);
           setScrubbingValue(null);
         }
         setIsScrubbing(false);
@@ -231,9 +233,9 @@ export const VideoOSD: React.FC<VideoOSDProps> = ({ manager }) => {
   const handleOverlayClick = () => {
     handleMouseMove();
     if (paused) {
-      manager.unpause();
+      guard.play();
     } else {
-      manager.pause();
+      guard.pause();
     }
   };
 
@@ -274,7 +276,7 @@ export const VideoOSD: React.FC<VideoOSDProps> = ({ manager }) => {
       <VideoSplashLoader
         item={currentItem}
         isVisible={isLoading || isBuffering || false}
-        onClose={() => manager.stop()}
+        onClose={() => guard.stop()}
       />
       <div
         className="absolute inset-0 z-40 transition-opacity duration-300 pointer-events-none"
@@ -309,6 +311,8 @@ export const VideoOSD: React.FC<VideoOSDProps> = ({ manager }) => {
           nextEpisodeData={nextEpisodeData}
           handleMouseMove={handleMouseMove}
           episodePlayOptions={episodePlayOptions}
+          onSeek={guard.seek}
+          onPause={guard.pause}
         />
 
         <div
@@ -359,17 +363,13 @@ export const VideoOSD: React.FC<VideoOSDProps> = ({ manager }) => {
                   manager.play(previousEpisodeData, episodePlayOptions);
                 }
               }}
-              onSeekBack={() =>
-                manager.seek(Math.max(0, currentTime - 10) * 10000000)
-              }
-              onSeekForward={() =>
-                manager.seek(Math.min(duration, currentTime + 10) * 10000000)
-              }
+              onSeekBack={() => guard.seek(Math.max(0, currentTime - 10) * 10000000)}
+              onSeekForward={() => guard.seek(Math.min(duration, currentTime + 10) * 10000000)}
               onPlayPause={() => {
                 if (paused) {
-                  manager.unpause();
+                  guard.play();
                 } else {
-                  manager.pause();
+                  guard.pause();
                 }
               }}
             />

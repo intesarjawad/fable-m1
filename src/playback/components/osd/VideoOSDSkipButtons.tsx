@@ -10,6 +10,8 @@ interface VideoOSDSkipButtonsProps {
   nextEpisodeData: any;
   handleMouseMove: () => void;
   episodePlayOptions?: any;
+  onSeek?: (ticks: number) => void;
+  onPause?: () => void;
 }
 
 export const VideoOSDSkipButtons: React.FC<VideoOSDSkipButtonsProps> = ({
@@ -19,6 +21,8 @@ export const VideoOSDSkipButtons: React.FC<VideoOSDSkipButtonsProps> = ({
   nextEpisodeData,
   handleMouseMove,
   episodePlayOptions,
+  onSeek,
+  onPause,
 }) => {
   if (!activeSegment) return null;
 
@@ -42,10 +46,10 @@ export const VideoOSDSkipButtons: React.FC<VideoOSDSkipButtonsProps> = ({
             );
           } else {
             const endTicks = activeSegment.EndTicks;
-            manager.seek(endTicks);
+            (onSeek || manager.seek)(endTicks);
             if (isCredits && !hasNextEpisode) {
               setTimeout(() => {
-                manager.pause();
+                (onPause || manager.pause)();
               }, 500);
             }
           }

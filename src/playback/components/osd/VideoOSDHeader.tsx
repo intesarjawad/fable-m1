@@ -2,6 +2,7 @@ import React from "react";
 import { ArrowLeft } from "lucide-react";
 import { PlaybackContextValue } from "@/src/playback/hooks/usePlaybackManager";
 import { SettingsMenu } from "../SettingsMenu";
+import { SyncPlayButton } from "./SyncPlayButton";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 
 interface VideoOSDHeaderProps {
@@ -56,6 +57,7 @@ export const VideoOSDHeader: React.FC<VideoOSDHeaderProps> = ({
         </div>
       </div>
       <div className="flex items-center gap-4">
+        <SyncPlayButton />
         <SettingsMenu manager={manager} isVisible={isVisible} />
       </div>
     </header>

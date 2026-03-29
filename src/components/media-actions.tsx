@@ -26,6 +26,7 @@ import {
   ChevronDown,
   Music,
   Check,
+  Users,
 } from "lucide-react";
 import {
   getAuthData,
@@ -38,6 +39,7 @@ import { usePlayback } from "../hooks/usePlayback";
 import { useIsMobile } from "../hooks/use-mobile";
 import { DolbyDigital, DolbyTrueHd, DolbyVision, DtsHd } from "./icons/codecs";
 import { UserPolicy } from "@jellyfin/sdk/lib/generated-client/models";
+import { useSyncPlay } from "@/src/contexts/syncplay-context";
 
 interface MediaActionsProps {
   movie?: JellyfinItem;
@@ -54,6 +56,7 @@ export function MediaActions({
 }: MediaActionsProps) {
   const media = movie || show || episode;
   const { play } = usePlayback();
+  const syncPlay = useSyncPlay();
   const isMobile = useIsMobile();
   const [selectedVersion, setSelectedVersion] =
     useState<MediaSourceInfo | null>(null);
@@ -395,6 +398,29 @@ export function MediaActions({
           {hasProgress ? (
             <span className="text-sm opacity-75 pr-1">{timeLeft} left</span>
           ) : null}
+        </Button>
+
+        <Button
+          variant="outline"
+          onClick={async () => {
+            if (media) {
+              onBeforePlay?.();
+              await syncPlay.createGroup(media.Name || "Watch Party");
+              await syncPlay.setQueue([media.Id!]);
+              play({
+                id: media.Id!,
+                name: media.Name!,
+                type: media.Type as "Movie" | "Series" | "Episode" | "TvChannel",
+                resumePositionTicks: 0,
+                selectedVersion: selectedVersion,
+                audioStreamIndex: selectedAudioStreamIndex,
+              });
+            }
+          }}
+          className="gap-2 w-full sm:w-auto justify-center sm:justify-start"
+        >
+          <Users className="h-4 w-4" />
+          Watch Together
         </Button>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
