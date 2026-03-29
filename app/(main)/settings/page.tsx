@@ -1,7 +1,7 @@
 import { AuroraBackground } from "@/src/components/aurora-background";
 import { SearchBar } from "@/src/components/search-component";
 import { Settings2 } from "lucide-react";
-import SeerrSection from "@/src/components/settings/seerr-section";
+import RivenSection from "@/src/components/settings/riven-section";
 import ProfileSection from "@/src/components/settings/profile-section";
 import ThemeSection from "@/src/components/settings/theme-section";
 import UserPreferenceSection from "@/src/components/settings/user-preference-section";
@@ -27,7 +27,7 @@ export default function SettingsPage() {
 
         <div className="grid gap-6">
           <ProfileSection />
-          <SeerrSection />
+          <RivenSection />
           <UserPreferenceSection />
           <ThemeSection />
         </div>

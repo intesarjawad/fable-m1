@@ -15,16 +15,6 @@ export interface AuthData {
   timestamp: number;
 }
 
-export type SeerrAuthType = "api-key" | "jellyfin-user" | "local-user";
-
-export type SeerrAuthData =
-  | { authType: "api-key"; serverUrl: string; apiKey: string }
-  | {
-      authType: "jellyfin-user" | "local-user";
-      serverUrl: string;
-      username: string;
-      password: string;
-    };
 
 // --- StoreServerURL actions ---
 const SERVER_URL_KEY = "jellyfin-server-url";
@@ -115,26 +105,33 @@ export async function executeClearAuthDataAction(
   }
 }
 
-// --- StoreSeerrData actions ---
-const SEERR_DATA_KEY = "seerr-config";
+// --- Riven config ---
+const RIVEN_CONFIG_KEY = "riven-config";
 
-export async function setSeerrData(value: SeerrAuthData) {
-  (await cookies()).set(SEERR_DATA_KEY, JSON.stringify(value));
+export interface RivenConfig {
+  apiUrl: string;
+  apiKey: string;
 }
 
-export async function getSeerrData(): Promise<SeerrAuthData | null> {
-  const cookieStore = await cookies();
-  const val = cookieStore.get(SEERR_DATA_KEY);
-  if (!val || !val.value) return null;
+export async function setRivenConfig(value: RivenConfig) {
+  (await cookies()).set(RIVEN_CONFIG_KEY, JSON.stringify(value), {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+  });
+}
 
+export async function getRivenConfig(): Promise<RivenConfig | null> {
+  const cookieStore = await cookies();
+  const val = cookieStore.get(RIVEN_CONFIG_KEY);
+  if (!val || !val.value) return null;
   try {
-    const parsed = JSON.parse(val.value);
-    return parsed as SeerrAuthData;
+    return JSON.parse(val.value) as RivenConfig;
   } catch {
     return null;
   }
 }
 
-export async function removeSeerrData() {
-  (await cookies()).delete(SEERR_DATA_KEY);
+export async function removeRivenConfig() {
+  (await cookies()).delete(RIVEN_CONFIG_KEY);
 }

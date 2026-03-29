@@ -7,7 +7,6 @@ import { createJellyfinInstance } from "../lib/utils";
 import { getDeviceId } from "../lib/device-id";
 import { StoreServerURL } from "./store/store-server-url";
 import { StoreAuthData } from "./store/store-auth-data";
-import { StoreSeerrData } from "./store/store-seerr-data";
 import { isAuthError } from "./media";
 
 // Type aliases for easier use
@@ -444,7 +443,6 @@ export function logout(navigate: (redirectPath: string) => void) {
   Promise.all([
     StoreAuthData.remove(),
     StoreServerURL.remove(),
-    StoreSeerrData.remove(),
   ]).then(() => {
     navigate("/login");
   });

@@ -53,7 +53,6 @@ import {
   CalendarClock,
   Activity,
   Key,
-  Compass,
   Monitor,
   Database,
   FileCode,
@@ -240,15 +239,6 @@ export function AppSidebar() {
                   <Link href="/" onClick={() => setOpenMobile(false)}>
                     <Home className="h-4 w-4" />
                     <span>Home</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link href="/discover" onClick={() => setOpenMobile(false)}>
-                    <Compass className="h-4 w-4" />
-                    <span>Discover</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
