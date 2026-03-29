@@ -159,8 +159,13 @@ export class PlaybackCore {
   private lastSyncTime = 0;
   private syncAttempts = 0;
 
+  /** Timestamp (Date.now()) when the user joined the current group.
+   *  Used to suppress stale Stop commands the server fires on empty group creation. */
+  groupJoinedAt = 0;
+
   // Callbacks
   onSeekComplete?: () => void;
+  onCommandExecuted?: (command: string) => void;
 
   // Sync correction settings (defaults from official client)
   enableSyncCorrection = false;
@@ -176,9 +181,35 @@ export class PlaybackCore {
     this.player = player;
   }
 
+  /** Estimate current server playback position in ticks, projecting forward from
+   *  a known position at a known server timestamp. Exposed as public so the
+   *  context can use it for PlayQueue position estimation. */
+  estimateCurrentTicks(ticks: number, whenRemoteMs: number): number {
+    const nowRemote = this.timeSync.localToRemote(Date.now());
+    return ticks + (nowRemote - whenRemoteMs) * TICKS_PER_MS;
+  }
+
+  getLastCommand(): SyncPlayCommand | null {
+    return this.lastCommand;
+  }
+
   applyCommand(cmd: SyncPlayCommand) {
     const when = new Date(cmd.When).getTime();
     const positionTicks = cmd.PositionTicks != null ? parseInt(String(cmd.PositionTicks), 10) : null;
+
+    // Suppress Stop commands that arrive within 5s of joining — the server
+    // sends Stop when creating an empty group and we don't want to kill
+    // playback the user just started.
+    if (cmd.Command === "Stop") {
+      const GROUP_JOIN_GRACE_PERIOD_MS = 5000;
+      if (this.groupJoinedAt > 0 && Date.now() - this.groupJoinedAt < GROUP_JOIN_GRACE_PERIOD_MS) {
+        return;
+      }
+      this.clearScheduled();
+      this.player.stop();
+      this.onCommandExecuted?.("Stop");
+      return;
+    }
 
     // Duplicate detection
     if (
@@ -217,10 +248,6 @@ export class PlaybackCore {
       case "Pause":
         this.schedulePause(when, positionTicks || 0);
         break;
-      case "Stop":
-        this.clearScheduled();
-        this.player.stop();
-        break;
       case "Seek":
         this.scheduleSeek(when, positionTicks || 0);
         break;
@@ -229,6 +256,10 @@ export class PlaybackCore {
 
   private scheduleUnpause(whenRemoteMs: number, positionTicks: number) {
     this.clearScheduled();
+
+    // Disable sync during the scheduled delay — re-enable after playback starts
+    this.syncEnabled = false;
+
     const whenLocal = this.timeSync.remoteToLocal(whenRemoteMs);
     const now = Date.now();
     const enableSyncDelay = this.maxDelaySpeedToSync / 2;
@@ -244,6 +275,7 @@ export class PlaybackCore {
 
       this.scheduledTimeout = setTimeout(() => {
         this.player.unpause();
+        this.onCommandExecuted?.("Unpause");
         this.syncTimeout = setTimeout(() => {
           this.syncEnabled = true;
         }, enableSyncDelay);
@@ -253,6 +285,7 @@ export class PlaybackCore {
       const serverPositionTicks = this.estimateCurrentTicks(positionTicks, whenRemoteMs);
       this.player.unpause();
       this.player.seek(serverPositionTicks);
+      this.onCommandExecuted?.("Unpause");
 
       this.syncTimeout = setTimeout(() => {
         this.syncEnabled = true;
@@ -270,6 +303,7 @@ export class PlaybackCore {
       // Seek to exact position after pause settles
       setTimeout(() => {
         this.player.seek(positionTicks);
+        this.onCommandExecuted?.("Pause");
       }, 50);
     };
 
@@ -287,11 +321,14 @@ export class PlaybackCore {
 
     const doSeek = () => {
       this.player.seek(positionTicks);
+      // Pause after seek so the ready handshake can coordinate unpause
+      this.player.pause();
       // Disable sync correction after seek — the lastCommand's position
       // is stale and would cause the engine to seek back. Sync re-enables
       // on the next Unpause command.
       this.syncEnabled = false;
-      // Also call the onSeekComplete callback so the context can report Ready
+      this.onCommandExecuted?.("Seek");
+      // Notify the context so it can report Ready to the server
       this.onSeekComplete?.();
     };
 
@@ -315,7 +352,8 @@ export class PlaybackCore {
     this.player.setPlaybackRate(1.0);
   }
 
-  /** Called on every timeupdate — runs sync correction */
+  /** Called on every timeupdate — runs sync correction.
+   *  Only active when both syncEnabled AND enableSyncCorrection are true. */
   onTimeUpdate(currentTimeMs: number, currentPositionMs: number) {
     if (!this.lastCommand || this.lastCommand.Command !== "Unpause") return;
     if (!this.syncEnabled || !this.enableSyncCorrection) return;
@@ -372,11 +410,6 @@ export class PlaybackCore {
 
     // In sync
     this.syncAttempts = 0;
-  }
-
-  private estimateCurrentTicks(ticks: number, whenRemoteMs: number): number {
-    const nowRemote = this.timeSync.localToRemote(Date.now());
-    return ticks + (nowRemote - whenRemoteMs) * TICKS_PER_MS;
   }
 
   destroy() {

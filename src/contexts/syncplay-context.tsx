@@ -36,6 +36,10 @@ import { toast } from "sonner";
 
 const TICKS_PER_MS = 10000;
 
+/** Debounce delay before reporting buffering to the server (ms).
+ *  Matches the official client — prevents spamming on brief stalls. */
+const BUFFERING_DEBOUNCE_MS = 3000;
+
 interface GroupInfoDto {
   GroupId?: string;
   GroupName?: string;
@@ -106,6 +110,10 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     isPublic: boolean;
     resolve: (code: string | null) => void;
   } | null>(null);
+
+  // Buffering debounce timer ref
+  const bufferingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastBufferingReportedRef = useRef(false);
 
   // Helper to report our current position to the server
   const reportReady = useCallback(() => {
@@ -183,6 +191,10 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
       reportReady();
     };
 
+    core.onCommandExecuted = () => {
+      // Could be used for logging or UI feedback in the future
+    };
+
     return () => {
       core.destroy();
     };
@@ -220,7 +232,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isAuthenticated, serverUrl, token]);
 
-  // --- Buffering reporting ---
+  // --- Buffering reporting (debounced) ---
 
   useEffect(() => {
     if (!isInGroup || !manager) return;
@@ -229,32 +241,66 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
     const ts = timeSyncRef.current;
     if (!ts) return;
 
-    const nowRemote = new Date(ts.localToRemote(Date.now())).toISOString();
-    const options = {
-      When: nowRemote,
-      PositionTicks: Math.round(currentTime * 1000 * TICKS_PER_MS),
-      IsPlaying: !paused,
-      PlaylistItemId: currentItem?.Id || "",
+    const buildOptions = () => {
+      const nowRemote = new Date(ts.localToRemote(Date.now())).toISOString();
+      return {
+        When: nowRemote,
+        PositionTicks: Math.round(currentTime * 1000 * TICKS_PER_MS),
+        IsPlaying: !paused,
+        PlaylistItemId: currentItem?.Id || "",
+      };
     };
 
     if (isBuffering) {
-      apiBuffering(options).catch(() => {});
+      // Debounce: only report buffering after sustained stall
+      if (!lastBufferingReportedRef.current && !bufferingTimerRef.current) {
+        bufferingTimerRef.current = setTimeout(() => {
+          bufferingTimerRef.current = null;
+          // Re-check — might have recovered during the debounce window
+          const currentState = managerRef.current?.playbackState;
+          if (currentState?.isBuffering && isInGroupRef.current) {
+            lastBufferingReportedRef.current = true;
+            apiBuffering(buildOptions()).catch(() => {});
+          }
+        }, BUFFERING_DEBOUNCE_MS);
+      }
     } else {
-      apiReady(options).catch(() => {});
+      // Cancel pending debounce if we recovered quickly
+      if (bufferingTimerRef.current) {
+        clearTimeout(bufferingTimerRef.current);
+        bufferingTimerRef.current = null;
+      }
+      // Report ready only if we previously reported buffering
+      if (lastBufferingReportedRef.current) {
+        lastBufferingReportedRef.current = false;
+        apiReady(buildOptions()).catch(() => {});
+      }
     }
+
+    return () => {
+      if (bufferingTimerRef.current) {
+        clearTimeout(bufferingTimerRef.current);
+        bufferingTimerRef.current = null;
+      }
+    };
   }, [isInGroup, manager?.playbackState?.isBuffering]);
 
   // --- Command handlers ---
 
   const handleSyncPlayCommand = useCallback(
     (data: any) => {
-      if (!isInGroupRef.current) return;
+      // A command should be processed if:
+      // 1. Time sync is ready
+      // 2. The command's EmittedAt is after enabledAt (not stale)
+      // 3. PlaybackCore exists
 
-      // Reject commands emitted before SyncPlay was enabled
+      // Reject commands emitted before SyncPlay was enabled for this session
       if (data.EmittedAt) {
         const emittedAt = new Date(data.EmittedAt).getTime();
         if (emittedAt < enabledAt.current) return;
       }
+
+      if (!playbackCoreRef.current) return;
 
       // Queue if time sync not ready yet
       if (!timeSyncReady.current) {
@@ -262,7 +308,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      playbackCoreRef.current?.applyCommand(data);
+      playbackCoreRef.current.applyCommand(data);
     },
     [],
   );
@@ -273,15 +319,21 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
 
       switch (Type) {
         case "GroupJoined": {
-          groupJoinedAt.current = Date.now();
+          const joinTimestamp = Date.now();
+          groupJoinedAt.current = joinTimestamp;
           enabledAt.current = Data?.LastUpdatedAt
             ? new Date(Data.LastUpdatedAt).getTime()
-            : Date.now();
+            : joinTimestamp;
           timeSyncReady.current = false;
           queuedCommand.current = null;
           setIsInGroup(true);
           setCurrentGroup(Data);
           setError(null);
+
+          // Propagate join timestamp to PlaybackCore for Stop suppression
+          if (playbackCoreRef.current) {
+            playbackCoreRef.current.groupJoinedAt = joinTimestamp;
+          }
 
           // Start time sync
           timeSyncRef.current?.forceUpdate();
@@ -344,7 +396,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
 
         case "PlayQueue": {
           if (!manager) break;
-          const { Playlist, PlayingItemIndex, StartPositionTicks } = Data;
+          const { Playlist, PlayingItemIndex, StartPositionTicks, Reason } = Data;
           if (Playlist?.length > 0 && PlayingItemIndex != null) {
             const currentItemId = Playlist[PlayingItemIndex]?.ItemId;
             if (
@@ -358,16 +410,42 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
             try {
               const itemDetails = await fetchMediaDetails(currentItemId);
               if (itemDetails) {
+                // Estimate the starting position:
+                // If the last command was an Unpause (group is playing), project
+                // the position forward using NTP time sync. Otherwise use the
+                // StartPositionTicks from the PlayQueue data.
+                let estimatedPosition = StartPositionTicks || 0;
+                if (Reason === "NewPlaylist") {
+                  const core = playbackCoreRef.current;
+                  const lastCmd = core?.getLastCommand();
+                  if (
+                    lastCmd &&
+                    lastCmd.Command === "Unpause" &&
+                    lastCmd.PositionTicks != null &&
+                    core
+                  ) {
+                    estimatedPosition = core.estimateCurrentTicks(
+                      parseInt(String(lastCmd.PositionTicks), 10),
+                      new Date(lastCmd.When).getTime(),
+                    );
+                  }
+                }
+
                 await manager.play(itemDetails as any, {
-                  startPositionTicks: StartPositionTicks || 0,
+                  startPositionTicks: estimatedPosition,
                 });
-                // After playback starts, pause immediately and report Ready.
+
+                // After playback starts, pause and report Ready.
                 // The server will coordinate when everyone should unpause.
-                // (Matches official client: scheduleReadyRequestOnPlaybackStart)
+                // Use 1.5s delay to let the player initialize video/audio.
+                const PLAYBACK_INIT_DELAY_MS = 1500;
                 setTimeout(() => {
-                  manager.pause();
-                  reportReady();
-                }, 1000);
+                  const m = managerRef.current;
+                  if (m) {
+                    m.pause();
+                    reportReady();
+                  }
+                }, PLAYBACK_INIT_DELAY_MS);
               }
             } catch (err) {
               console.error("Failed to start SyncPlay queue item:", err);
@@ -392,7 +470,7 @@ export function SyncPlayProvider({ children }: { children: React.ReactNode }) {
           break;
       }
     },
-    [manager, userId],
+    [manager, userId, reportReady],
   );
 
   // --- WebSocket subscriptions ---
