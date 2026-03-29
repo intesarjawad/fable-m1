@@ -104,7 +104,9 @@ function SidebarWatchPartyContent() {
     <>
       {availableGroups.map((group) => (
         <SidebarMenuSubItem key={group.GroupId}>
-          <SidebarMenuSubButton onClick={() => joinGroup(group.GroupId!)}>
+          <SidebarMenuSubButton onClick={async () => {
+            await joinGroup(group.GroupId!);
+          }}>
             <Users className="h-3 w-3" />
             <span className="truncate">{group.GroupName || "Watch Party"}</span>
           </SidebarMenuSubButton>
