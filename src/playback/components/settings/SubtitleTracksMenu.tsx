@@ -8,9 +8,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "../../../components/ui/dropdown-menu";
-import { Captions, Type } from "lucide-react";
+import { Captions, Type, Globe, Loader2, Ear } from "lucide-react";
 import { PlaybackContextValue } from "../../hooks/usePlaybackManager";
 import { getSubtitleTracks } from "../../../actions";
+import { searchSubdlSubtitles, isSubdlConfigured } from "../../../actions/subdl";
+import type { SubdlSubtitle } from "../../../actions/subdl";
 import { SettingsMenuButton } from "./SettingsMenuButton";
 
 interface SubtitleTracksMenuProps {
@@ -27,6 +29,11 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
   const { playbackState } = manager;
   const { currentItem, currentMediaSource } = playbackState;
   const [subtitleTracks, setSubtitleTracks] = useState<any[]>([]);
+  const [subdlResults, setSubdlResults] = useState<SubdlSubtitle[]>([]);
+  const [subdlAvailable, setSubdlAvailable] = useState(false);
+  const [subdlLoading, setSubdlLoading] = useState(false);
+  const [subdlSearched, setSubdlSearched] = useState(false);
+  const [loadingSubdlIndex, setLoadingSubdlIndex] = useState<number | null>(null);
 
   const [subtitleSize, setSubtitleSize] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -52,6 +59,55 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     }
     fetchTracks();
   }, [currentItem?.Id, currentMediaSource?.Id]);
+
+  // Check if Subdl is configured
+  useEffect(() => {
+    isSubdlConfigured().then(setSubdlAvailable);
+  }, []);
+
+  // Reset Subdl state when item changes
+  useEffect(() => {
+    setSubdlResults([]);
+    setSubdlSearched(false);
+  }, [currentItem?.Id]);
+
+  const handleSearchOnline = async () => {
+    const imdbId = (currentItem as any)?.ProviderIds?.Imdb;
+    if (!imdbId) return;
+
+    setSubdlLoading(true);
+    try {
+      const itemType = currentItem?.Type;
+      const isEpisode = itemType === "Episode";
+
+      const result = await searchSubdlSubtitles(imdbId, {
+        type: isEpisode ? "tv" : "movie",
+        seasonNumber: isEpisode ? (currentItem as any)?.ParentIndexNumber : undefined,
+        episodeNumber: isEpisode ? (currentItem as any)?.IndexNumber : undefined,
+        languages: "EN",
+      });
+
+      setSubdlResults(result.subtitles);
+      setSubdlSearched(true);
+    } catch {
+      setSubdlSearched(true);
+    } finally {
+      setSubdlLoading(false);
+    }
+  };
+
+  const handleSelectSubdl = async (subtitle: SubdlSubtitle, index: number) => {
+    setLoadingSubdlIndex(index);
+    try {
+      // Fetch the subtitle via our download proxy (extracts from zip server-side)
+      const downloadUrl = `/api/subdl/download?path=${encodeURIComponent(subtitle.url)}`;
+      await manager.setSubtitleUrl(downloadUrl);
+    } catch (error) {
+      console.error("Failed to load Subdl subtitle:", error);
+    } finally {
+      setLoadingSubdlIndex(null);
+    }
+  };
 
   const handleSubtitleSizeChange = (newSize: number) => {
     setSubtitleSize(newSize);
@@ -85,7 +141,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
       <DropdownMenuContent
         sideOffset={8}
         side="top"
-        className="w-48 rounded-2xl overflow-hidden text-sm z-100 max-h-[60vh] overflow-y-auto"
+        className="w-56 rounded-2xl overflow-hidden text-sm z-100 max-h-[60vh] overflow-y-auto"
         style={{
           background: "rgba(30, 30, 30, 0.65)",
           backdropFilter: "blur(40px)",
@@ -156,6 +212,71 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
+
+        {/* Subdl online search section */}
+        {subdlAvailable && (
+          <>
+            <DropdownMenuSeparator className="bg-white/10" />
+
+            {!subdlSearched ? (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleSearchOnline();
+                }}
+                disabled={subdlLoading}
+                className="w-full flex items-center gap-2.5 px-5 py-2.5 text-white/70 hover:text-white hover:bg-white/10 transition-colors text-left"
+              >
+                {subdlLoading ? (
+                  <Loader2 size={14} className="animate-spin shrink-0" />
+                ) : (
+                  <Globe size={14} className="shrink-0" />
+                )}
+                <span className="text-sm">
+                  {subdlLoading ? "Searching..." : "Search online"}
+                </span>
+              </button>
+            ) : subdlResults.length === 0 ? (
+              <div className="px-5 py-2.5 text-white/40 text-sm">
+                No online subtitles found
+              </div>
+            ) : (
+              <>
+                <div className="px-5 py-1.5 text-white/40 text-[11px] uppercase tracking-wider font-medium">
+                  Online
+                </div>
+                {subdlResults.slice(0, 8).map((subtitle, i) => (
+                  <button
+                    key={i}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleSelectSubdl(subtitle, i);
+                    }}
+                    disabled={loadingSubdlIndex !== null}
+                    className="w-full flex items-center gap-2.5 px-5 py-2 text-white/90 hover:bg-white/10 transition-colors text-left"
+                  >
+                    {loadingSubdlIndex === i ? (
+                      <Loader2 size={12} className="animate-spin shrink-0" />
+                    ) : subtitle.hearingImpaired ? (
+                      <Ear size={12} className="shrink-0 text-white/50" />
+                    ) : (
+                      <div className="w-3 shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm truncate">{subtitle.releaseName}</p>
+                      <p className="text-[11px] text-white/40 truncate">
+                        {subtitle.language}
+                        {subtitle.author && subtitle.author !== "none" ? ` \u00b7 ${subtitle.author}` : ""}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </>
+            )}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

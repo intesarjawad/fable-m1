@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 interface SubtitleLine {
   startTime: number; // in seconds
@@ -20,6 +20,15 @@ interface SubtitleDisplayProps {
   textTracks?: SubtitleTrack[];
   isVisible?: boolean;
   isControlsVisible?: boolean;
+}
+
+/**
+ * Strip ASS/SSA override tags from subtitle text.
+ * These look like {\an8}, {\pos(320,50)}, {\fad(100,200)}, {\fnArial}, etc.
+ * Jellyfin converts timing to VTT but preserves these formatting codes in the text body.
+ */
+function stripAssTags(text: string): string {
+  return text.replace(/\{[^}]*\}/g, "");
 }
 
 /**
@@ -99,7 +108,7 @@ function parseSubtitleHTML(text: string): React.ReactNode {
             case "s":
               element = <s key={`s-${idx}`}>{childElements}</s>;
               break;
-            case "font":
+            case "font": {
               const style: React.CSSProperties = {};
               const colorMatch = item.attributes?.match(
                 /color=(?:"([^"]+)"|'([^']+)'|([^>\s]+))/i,
@@ -119,6 +128,7 @@ function parseSubtitleHTML(text: string): React.ReactNode {
                 </span>
               );
               break;
+            }
             default:
               element = <span key={`span-${idx}`}>{childElements}</span>;
           }
@@ -163,11 +173,15 @@ function parseVTT(content: string): SubtitleLine[] {
       }
 
       if (textLines.length > 0) {
-        subtitles.push({
-          startTime,
-          endTime,
-          text: textLines.join("\n"),
-        });
+        const rawText = textLines.join("\n");
+        const cleanText = stripAssTags(rawText).trim();
+        if (cleanText) {
+          subtitles.push({
+            startTime,
+            endTime,
+            text: cleanText,
+          });
+        }
       }
     }
   }
@@ -201,6 +215,8 @@ export const SubtitleDisplay: React.FC<SubtitleDisplayProps> = ({
     null,
   );
   const [subtitleSize, setSubtitleSize] = useState<number>(100);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const previousTextRef = useRef<string | null>(null);
 
   // Load subtitle size from localStorage
   useEffect(() => {
@@ -298,37 +314,58 @@ export const SubtitleDisplay: React.FC<SubtitleDisplayProps> = ({
     setCurrentSubtitle(active || null);
   }, [currentTime, subtitleStreamIndex, allSubtitles]);
 
+  // Fade transition when subtitle text changes
+  useEffect(() => {
+    const newText = currentSubtitle?.text ?? null;
+    if (newText !== previousTextRef.current) {
+      setIsTransitioning(true);
+      const timer = setTimeout(() => setIsTransitioning(false), 30);
+      previousTextRef.current = newText;
+      return () => clearTimeout(timer);
+    }
+  }, [currentSubtitle]);
+
   if (!isVisible || !currentSubtitle) {
     return null;
   }
 
+  const scaledFontSize = 20 * (subtitleSize / 100);
+
   return (
     <div
-      className="absolute left-0 right-0 flex justify-center pointer-events-none transition-all duration-300"
+      className="absolute left-0 right-0 flex justify-center pointer-events-none transition-[bottom] duration-300 ease-out"
       style={{
-        bottom: isControlsVisible ? "176px" : "112px",
+        bottom: isControlsVisible ? "176px" : "64px",
         zIndex: 40,
       }}
     >
       <div
+        className="transition-opacity duration-150 ease-out"
         style={{
-          maxWidth: "95%",
-          textAlign: "center",
+          opacity: isTransitioning ? 0 : 1,
+          maxWidth: "85%",
         }}
       >
         <div
-          className="text-white leading-relaxed whitespace-pre-wrap"
+          className="inline-block rounded-2xl backdrop-blur-xl"
           style={{
-            fontSize: `${20 * (subtitleSize / 100)}px`,
-            fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
-            fontWeight: 400,
-            textShadow:
-              "2px 2px 4px rgba(0, 0, 0, 1), -2px -2px 4px rgba(0, 0, 0, 1), 2px -2px 4px rgba(0, 0, 0, 1), -2px 2px 4px rgba(0, 0, 0, 1)",
-            letterSpacing: "0.5px",
-            lineHeight: "1.4",
+            backgroundColor: "rgba(0, 0, 0, 0.40)",
+            padding: `${Math.max(6, scaledFontSize * 0.35)}px ${Math.max(14, scaledFontSize * 0.8)}px`,
           }}
         >
-          {parseSubtitleHTML(currentSubtitle.text)}
+          <div
+            className="text-white whitespace-pre-wrap text-center"
+            style={{
+              fontSize: `${scaledFontSize}px`,
+              fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+              fontWeight: 500,
+              textShadow: "0 0 12px rgba(0, 0, 0, 0.5)",
+              letterSpacing: "0.02em",
+              lineHeight: 1.45,
+            }}
+          >
+            {parseSubtitleHTML(currentSubtitle.text)}
+          </div>
         </div>
       </div>
     </div>
