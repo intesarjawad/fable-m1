@@ -755,26 +755,33 @@ export function usePlaybackManager(): PlaybackContextValue {
   const setSubtitleUrl = useCallback(
     async (url: string) => {
       try {
+        console.log("[subtitle-url] Fetching:", url);
         const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`Failed to fetch subtitle: ${response.statusText}`);
         }
 
         const content = await response.text();
+        console.log("[subtitle-url] Content length:", content.length, "First 200 chars:", content.substring(0, 200));
         const vttContent = convertSubtitleToVTT(content);
+        console.log("[subtitle-url] VTT length:", vttContent.length, "First 200 chars:", vttContent.substring(0, 200));
         const blob = new Blob([vttContent], { type: "text/vtt" });
         const blobUrl = URL.createObjectURL(blob);
 
+        // Preserve existing Jellyfin tracks, add online track
+        const existingTracks = (playbackState.textTracks || []).filter(
+          (t) => t.index !== 9999
+        );
         const newTrack = {
           kind: "subtitles",
-          label: "OpenSubtitles",
+          label: "English (Online)",
           src: blobUrl,
           language: "en",
           default: true,
           index: 9999,
         };
 
-        const updatedTracks = [newTrack];
+        const updatedTracks = [...existingTracks, newTrack];
 
         updateState({
           textTracks: updatedTracks,
