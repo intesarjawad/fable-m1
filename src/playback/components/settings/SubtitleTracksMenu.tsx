@@ -10,7 +10,7 @@ import {
 } from "../../../components/ui/dropdown-menu";
 import { Captions, Type, Loader2, Ear, Download } from "lucide-react";
 import { PlaybackContextValue } from "../../hooks/usePlaybackManager";
-import { getSubtitleTracks } from "../../../actions";
+import { getSubtitleTracks, fetchMediaDetails } from "../../../actions";
 import { searchSubdlSubtitles, isSubdlConfigured } from "../../../actions/subdl";
 import type { SubdlSubtitle } from "../../../actions/subdl";
 import { SettingsMenuButton } from "./SettingsMenuButton";
@@ -118,22 +118,52 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
   useEffect(() => {
     if (!open || !subdlAvailable || subdlResults.length > 0 || subdlLoading) return;
 
-    const imdbId = (currentItem as any)?.ProviderIds?.Imdb;
-    if (!imdbId) return;
-
+    let cancelled = false;
     setSubdlLoading(true);
-    const itemType = currentItem?.Type;
-    const isEpisode = itemType === "Episode";
 
-    searchSubdlSubtitles(imdbId, {
-      type: isEpisode ? "tv" : "movie",
-      seasonNumber: isEpisode ? (currentItem as any)?.ParentIndexNumber : undefined,
-      episodeNumber: isEpisode ? (currentItem as any)?.IndexNumber : undefined,
-      languages: "EN",
-    })
-      .then((result) => setSubdlResults(result.subtitles))
-      .catch(() => {})
-      .finally(() => setSubdlLoading(false));
+    async function search() {
+      try {
+        const itemType = currentItem?.Type;
+        const isEpisode = itemType === "Episode";
+        let providerIds = (currentItem as any)?.ProviderIds;
+
+        // Episodes often don't have their own IMDB ID.
+        // Fetch the parent series to get the series-level IMDB/TMDB ID.
+        if (isEpisode && !providerIds?.Imdb && !providerIds?.Tmdb) {
+          const seriesId = (currentItem as any)?.SeriesId;
+          if (seriesId) {
+            const series = await fetchMediaDetails(seriesId);
+            if (series?.ProviderIds) {
+              providerIds = series.ProviderIds;
+            }
+          }
+        }
+
+        const imdbId = providerIds?.Imdb;
+        const tmdbId = providerIds?.Tmdb;
+        if (!imdbId && !tmdbId) {
+          if (!cancelled) setSubdlLoading(false);
+          return;
+        }
+
+        const searchId = imdbId || tmdbId;
+        const result = await searchSubdlSubtitles(searchId!, {
+          type: isEpisode ? "tv" : "movie",
+          seasonNumber: isEpisode ? (currentItem as any)?.ParentIndexNumber : undefined,
+          episodeNumber: isEpisode ? (currentItem as any)?.IndexNumber : undefined,
+          languages: "EN",
+        });
+
+        if (!cancelled) setSubdlResults(result.subtitles);
+      } catch {
+        // Subdl search failed — not critical, Jellyfin tracks still work
+      } finally {
+        if (!cancelled) setSubdlLoading(false);
+      }
+    }
+
+    search();
+    return () => { cancelled = true; };
   }, [open, subdlAvailable, subdlResults.length, subdlLoading, currentItem]);
 
   // Reset state when item changes

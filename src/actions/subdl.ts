@@ -20,7 +20,7 @@ export interface SubdlSearchResult {
 }
 
 export async function searchSubdlSubtitles(
-  imdbId: string,
+  mediaId: string,
   options?: {
     type?: "movie" | "tv";
     seasonNumber?: number;
@@ -33,9 +33,15 @@ export async function searchSubdlSubtitles(
 
   const params = new URLSearchParams({
     api_key: apiKey,
-    imdb_id: imdbId,
     subs_per_page: "15",
   });
+
+  // Detect ID type: IMDB IDs start with "tt", otherwise assume TMDB ID
+  if (mediaId.startsWith("tt")) {
+    params.set("imdb_id", mediaId);
+  } else {
+    params.set("tmdb_id", mediaId);
+  }
 
   if (options?.type) params.set("type", options.type);
   if (options?.seasonNumber) params.set("season_number", String(options.seasonNumber));
