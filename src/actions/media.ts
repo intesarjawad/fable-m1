@@ -1421,6 +1421,41 @@ export async function fetchEpisodeDetails(
   }
 }
 
+export async function fetchAllLibraryTmdbIds(): Promise<
+  { tmdbId: number; jellyfinId: string; type: string }[]
+> {
+  const { serverUrl, user } = await getAuthData();
+  if (!user.AccessToken) throw new Error("No access token found");
+  const jellyfin = createJellyfinInstance();
+  const api = jellyfin.createApi(serverUrl);
+  api.accessToken = user.AccessToken;
+  const itemsApi = getItemsApi(api);
+
+  const results: { tmdbId: number; jellyfinId: string; type: string }[] = [];
+
+  for (const itemType of ["Movie", "Series"] as const) {
+    const response = await itemsApi.getItems({
+      userId: user.Id,
+      includeItemTypes: [itemType as any],
+      recursive: true,
+      fields: ["ProviderIds"] as any,
+      limit: 10000,
+    });
+
+    for (const item of response.data.Items ?? []) {
+      const tmdbIdStr = item.ProviderIds?.Tmdb;
+      if (tmdbIdStr && item.Id) {
+        const tmdbId = parseInt(tmdbIdStr, 10);
+        if (!isNaN(tmdbId)) {
+          results.push({ tmdbId, jellyfinId: item.Id, type: itemType });
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
 export async function getNextEpisodeForSeries(
   seriesId: string,
 ): Promise<JellyfinItem | null> {

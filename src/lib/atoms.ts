@@ -64,3 +64,7 @@ export const homeLibrariesAtom = atom<
 export const homeLastVisitedTimeAtom = atom(0); // Last visited time for homepage
 export const heroItemsAtom = atom<BaseItemDto[]>([]);
 export const heroLastVisitedTimeAtom = atom(0); // Last visited time for hero section
+
+// TMDB → Jellyfin cross-reference: Map<tmdbId, { jellyfinId, type }>
+export const jellyfinTmdbMapAtom = atom<Map<number, { jellyfinId: string; type: string }>>(new Map());
+export const jellyfinTmdbMapLoadedAtom = atom(false);
