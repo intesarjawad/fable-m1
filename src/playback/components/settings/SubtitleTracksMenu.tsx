@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "../../../components/ui/dropdown-menu";
-import { Captions, Type, Loader2, Ear, Download } from "lucide-react";
+import { Captions, Type, Loader2, Globe } from "lucide-react";
 import { PlaybackContextValue } from "../../hooks/usePlaybackManager";
 import { getSubtitleTracks, fetchMediaDetails } from "../../../actions";
 import { searchSubdlSubtitles, isSubdlConfigured } from "../../../actions/subdl";
@@ -21,38 +21,39 @@ interface SubtitleTracksMenuProps {
   onOpenChange: (open: boolean) => void;
 }
 
-function normalizeLanguageCode(code: string): string {
-  const lower = code.toLowerCase().trim();
-  const languageMap: Record<string, string> = {
-    en: "en", eng: "en", english: "en",
-    es: "es", spa: "es", spanish: "es",
-    fr: "fr", fre: "fr", fra: "fr", french: "fr",
-    de: "de", ger: "de", deu: "de", german: "de",
-    it: "it", ita: "it", italian: "it",
-    pt: "pt", por: "pt", portuguese: "pt",
-    ja: "ja", jpn: "ja", japanese: "ja",
-    ko: "ko", kor: "ko", korean: "ko",
-    zh: "zh", chi: "zh", zho: "zh", chinese: "zh",
-    ar: "ar", ara: "ar", arabic: "ar",
-    ru: "ru", rus: "ru", russian: "ru",
-  };
-  return languageMap[lower] || lower;
-}
+/**
+ * Pick the best subtitle from Subdl results for a specific episode.
+ * Prefers: exact episode match > non-HI > first result
+ */
+function pickBestSubtitle(
+  subtitles: SubdlSubtitle[],
+  episodeNumber?: number
+): SubdlSubtitle | null {
+  if (subtitles.length === 0) return null;
 
-function isEnglish(languageCode: string): boolean {
-  return normalizeLanguageCode(languageCode) === "en";
-}
+  // Filter to non-HI first, fall back to all
+  const nonHi = subtitles.filter((s) => !s.hearingImpaired);
+  const candidates = nonHi.length > 0 ? nonHi : subtitles;
 
-/** Unified subtitle item */
-interface MergedSubtitleItem {
-  source: "jellyfin" | "subdl";
-  label: string;
-  sublabel?: string;
-  language: string;
-  hearingImpaired: boolean;
-  jellyfinIndex?: number;
-  subdlSubtitle?: SubdlSubtitle;
-  subdlIndex?: number;
+  // If we have an episode number, try to find one that mentions it
+  if (episodeNumber) {
+    const episodePatterns = [
+      `E${String(episodeNumber).padStart(2, "0")}`,
+      `E${episodeNumber}`,
+      `Episode.${episodeNumber}`,
+      `Episode ${episodeNumber}`,
+    ];
+
+    for (const pattern of episodePatterns) {
+      const match = candidates.find((s) =>
+        s.releaseName.toUpperCase().includes(pattern.toUpperCase())
+      );
+      if (match) return match;
+    }
+  }
+
+  // Fall back to first candidate (Subdl sorts by relevance)
+  return candidates[0];
 }
 
 export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
@@ -63,11 +64,10 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
   const { playbackState } = manager;
   const { currentItem, currentMediaSource } = playbackState;
   const [subtitleTracks, setSubtitleTracks] = useState<any[]>([]);
-  const [subdlResults, setSubdlResults] = useState<SubdlSubtitle[]>([]);
-  const [subdlLoading, setSubdlLoading] = useState(false);
-  const [loadingSubdlIndex, setLoadingSubdlIndex] = useState<number | null>(null);
-
-  // Track which item we've searched to avoid repeats
+  const [bestOnlineSub, setBestOnlineSub] = useState<SubdlSubtitle | null>(null);
+  const [onlineSearching, setOnlineSearching] = useState(false);
+  const [onlineSearchDone, setOnlineSearchDone] = useState(false);
+  const [loadingOnline, setLoadingOnline] = useState(false);
   const searchedItemIdRef = useRef<string | null>(null);
 
   const [subtitleSize, setSubtitleSize] = useState<number>(() => {
@@ -98,76 +98,79 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 
   // Reset when item changes
   useEffect(() => {
-    setSubdlResults([]);
+    setBestOnlineSub(null);
+    setOnlineSearchDone(false);
     searchedItemIdRef.current = null;
   }, [currentItem?.Id]);
 
-  // Subdl search — triggered once when menu opens for a new item
+  // Sort Jellyfin tracks: English first
+  const sortedTracks = React.useMemo(() => {
+    return [...subtitleTracks].sort((a, b) => {
+      const aEn = (a.language || "").toLowerCase().startsWith("en");
+      const bEn = (b.language || "").toLowerCase().startsWith("en");
+      if (aEn && !bEn) return -1;
+      if (!aEn && bEn) return 1;
+      return 0;
+    });
+  }, [subtitleTracks]);
+
+  // Subdl search — find the single best subtitle
   const runSubdlSearch = useCallback(async () => {
     const itemId = currentItem?.Id;
     if (!itemId || searchedItemIdRef.current === itemId) return;
     searchedItemIdRef.current = itemId;
 
-    // Check if Subdl is even configured
     const available = await isSubdlConfigured().catch(() => false);
     if (!available) return;
 
-    setSubdlLoading(true);
-
-    // Hard 6-second deadline for the entire search
-    const deadline = setTimeout(() => setSubdlLoading(false), 6000);
+    setOnlineSearching(true);
+    const deadline = setTimeout(() => {
+      setOnlineSearching(false);
+      setOnlineSearchDone(true);
+    }, 6000);
 
     try {
-      const itemType = currentItem?.Type;
-      const isEpisode = itemType === "Episode";
+      const isEpisode = currentItem?.Type === "Episode";
       let imdbId: string | undefined;
       let tmdbId: string | undefined;
 
-      console.log("[subdl-client] Starting search. Type:", itemType, "Item:", currentItem?.Name);
-      console.log("[subdl-client] ProviderIds:", JSON.stringify((currentItem as any)?.ProviderIds));
-      console.log("[subdl-client] SeriesId:", (currentItem as any)?.SeriesId);
-
-      // For episodes, fetch series to get correct IMDB ID
+      // For episodes, get series IMDB ID
       if (isEpisode) {
         const seriesId = (currentItem as any)?.SeriesId;
         if (seriesId) {
           try {
-            console.log("[subdl-client] Fetching series details for:", seriesId);
             const series = await fetchMediaDetails(seriesId);
-            console.log("[subdl-client] Series ProviderIds:", JSON.stringify(series?.ProviderIds));
             imdbId = series?.ProviderIds?.Imdb ?? undefined;
             tmdbId = series?.ProviderIds?.Tmdb ?? undefined;
-          } catch (e) {
-            console.error("[subdl-client] Series fetch failed:", e);
-          }
+          } catch {}
         }
       }
 
-      // Fall back to item's own IDs
       if (!imdbId && !tmdbId) {
         imdbId = (currentItem as any)?.ProviderIds?.Imdb;
         tmdbId = (currentItem as any)?.ProviderIds?.Tmdb;
       }
 
-      // Build search query — ID or name
       const searchId = imdbId || tmdbId || (currentItem as any)?.SeriesName || currentItem?.Name;
-      console.log("[subdl-client] Search ID:", searchId);
       if (!searchId) return;
+
+      const episodeNumber = isEpisode ? (currentItem as any)?.IndexNumber : undefined;
 
       const result = await searchSubdlSubtitles(searchId, {
         type: isEpisode ? "tv" : "movie",
         seasonNumber: isEpisode ? (currentItem as any)?.ParentIndexNumber : undefined,
-        episodeNumber: isEpisode ? (currentItem as any)?.IndexNumber : undefined,
+        episodeNumber,
         languages: "EN",
       });
 
-      console.log("[subdl-client] Got results:", result.subtitles.length);
-      setSubdlResults(result.subtitles);
+      const best = pickBestSubtitle(result.subtitles, episodeNumber);
+      setBestOnlineSub(best);
     } catch {
       // Not critical
     } finally {
       clearTimeout(deadline);
-      setSubdlLoading(false);
+      setOnlineSearching(false);
+      setOnlineSearchDone(true);
     }
   }, [currentItem]);
 
@@ -176,21 +179,22 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     if (open) runSubdlSearch();
   }, [open, runSubdlSearch]);
 
-  const handleSelectSubdl = async (subtitle: SubdlSubtitle, index: number) => {
-    setLoadingSubdlIndex(index);
+  // Load the online subtitle
+  const handleLoadOnline = async () => {
+    if (!bestOnlineSub) return;
+    setLoadingOnline(true);
     try {
       const params = new URLSearchParams({
-        path: subtitle.url,
+        path: bestOnlineSub.url,
         ...(currentItem?.Id ? { itemId: currentItem.Id } : {}),
-        language: subtitle.languageCode.toLowerCase() || "eng",
-        ...(subtitle.hearingImpaired ? { hi: "true" } : {}),
+        language: bestOnlineSub.languageCode.toLowerCase() || "eng",
+        ...(bestOnlineSub.hearingImpaired ? { hi: "true" } : {}),
       });
-      const downloadUrl = `/api/subdl/download?${params}`;
-      await manager.setSubtitleUrl(downloadUrl);
+      await manager.setSubtitleUrl(`/api/subdl/download?${params}`);
     } catch (error) {
-      console.error("Failed to load Subdl subtitle:", error);
+      console.error("Failed to load online subtitle:", error);
     } finally {
-      setLoadingSubdlIndex(null);
+      setLoadingOnline(false);
     }
   };
 
@@ -213,52 +217,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     manager.setSubtitleStreamIndex(index);
   };
 
-  // Build merged + sorted subtitle list
-  const mergedSubtitles = useMemo(() => {
-    const items: MergedSubtitleItem[] = [];
-
-    for (const track of subtitleTracks) {
-      items.push({
-        source: "jellyfin",
-        label: track.label || "Unknown",
-        language: track.language || "",
-        hearingImpaired: track.label?.toLowerCase().includes("sdh") ||
-          track.label?.toLowerCase().includes("hearing") || false,
-        jellyfinIndex: track.index,
-      });
-    }
-
-    for (let i = 0; i < subdlResults.length && i < 10; i++) {
-      const subtitle = subdlResults[i];
-      items.push({
-        source: "subdl",
-        label: subtitle.releaseName,
-        sublabel: subtitle.language +
-          (subtitle.author && subtitle.author !== "none" ? ` \u00b7 ${subtitle.author}` : ""),
-        language: subtitle.languageCode,
-        hearingImpaired: subtitle.hearingImpaired,
-        subdlSubtitle: subtitle,
-        subdlIndex: i,
-      });
-    }
-
-    // Sort: English first, Jellyfin before Subdl within each language
-    items.sort((a, b) => {
-      const aEn = isEnglish(a.language);
-      const bEn = isEnglish(b.language);
-      if (aEn && !bEn) return -1;
-      if (!aEn && bEn) return 1;
-
-      const langCmp = normalizeLanguageCode(a.language).localeCompare(normalizeLanguageCode(b.language));
-      if (langCmp !== 0) return langCmp;
-
-      if (a.source === "jellyfin" && b.source === "subdl") return -1;
-      if (a.source === "subdl" && b.source === "jellyfin") return 1;
-      return 0;
-    });
-
-    return items;
-  }, [subtitleTracks, subdlResults]);
+  const isOnlineActive = playbackState.subtitleStreamIndex === 9999;
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -268,7 +227,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
       <DropdownMenuContent
         sideOffset={8}
         side="top"
-        className="w-64 rounded-2xl overflow-hidden text-sm z-100 max-h-[60vh] overflow-y-auto"
+        className="w-56 rounded-2xl overflow-hidden text-sm z-100 max-h-[60vh] overflow-y-auto"
         style={{
           background: "rgba(30, 30, 30, 0.65)",
           backdropFilter: "blur(40px)",
@@ -281,6 +240,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
           value={String(playbackState.subtitleStreamIndex ?? -1)}
           onValueChange={handleSubtitleChange}
         >
+          {/* Off */}
           <DropdownMenuRadioItem
             value="-1"
             className="px-5 py-2.5 transition-colors hover:bg-white/10 text-white"
@@ -288,6 +248,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
             <span className="text-white/90 ml-3">Off</span>
           </DropdownMenuRadioItem>
 
+          {/* Size slider */}
           <div
             style={{
               display: "flex",
@@ -326,58 +287,58 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 
           <DropdownMenuSeparator className="bg-white/10" />
 
-          {/* Merged subtitle list */}
-          {mergedSubtitles.map((item) => {
-            if (item.source === "jellyfin") {
-              return (
-                <DropdownMenuRadioItem
-                  key={`jf-${item.jellyfinIndex}`}
-                  value={String(item.jellyfinIndex)}
-                  className="px-5 py-2 transition-colors hover:bg-white/10 text-white"
-                >
-                  <span className="text-white/90 ml-3 text-sm">{item.label}</span>
-                </DropdownMenuRadioItem>
-              );
-            }
-
-            const subdlIdx = item.subdlIndex!;
-            return (
-              <button
-                key={`subdl-${subdlIdx}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSelectSubdl(item.subdlSubtitle!, subdlIdx);
-                }}
-                disabled={loadingSubdlIndex !== null}
-                className="w-full flex items-center gap-2.5 px-5 py-2 text-white/90 hover:bg-white/10 transition-colors text-left"
-              >
-                {loadingSubdlIndex === subdlIdx ? (
-                  <Loader2 size={12} className="animate-spin shrink-0 ml-0.5" />
-                ) : item.hearingImpaired ? (
-                  <Ear size={12} className="shrink-0 text-white/40 ml-0.5" />
-                ) : (
-                  <Download size={12} className="shrink-0 text-white/25 ml-0.5" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm truncate">{item.label}</p>
-                  {item.sublabel && (
-                    <p className="text-[11px] text-white/40 truncate">{item.sublabel}</p>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-
-          {/* Subdl loading — non-blocking, below everything */}
-          {subdlLoading && (
-            <div className="flex items-center gap-2 px-5 py-2 text-white/30">
-              <Loader2 size={12} className="animate-spin" />
-              <span className="text-xs">Searching online...</span>
+          {/* Online subtitle — single best match */}
+          {onlineSearching && (
+            <div className="flex items-center gap-2.5 px-5 py-2.5 text-white/40">
+              <Loader2 size={14} className="animate-spin" />
+              <span className="text-sm">Finding best match...</span>
             </div>
           )}
 
-          {!subdlLoading && mergedSubtitles.length === 0 && (
+          {!onlineSearching && bestOnlineSub && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleLoadOnline();
+              }}
+              disabled={loadingOnline}
+              className={`w-full flex items-center gap-2.5 px-5 py-2.5 transition-colors text-left ${
+                isOnlineActive
+                  ? "bg-white/15 text-white"
+                  : "text-white/90 hover:bg-white/10"
+              }`}
+            >
+              {loadingOnline ? (
+                <Loader2 size={14} className="animate-spin shrink-0" />
+              ) : (
+                <Globe size={14} className="shrink-0 text-white/50" />
+              )}
+              <div className="flex-1 min-w-0">
+                <span className="text-sm">English (Online)</span>
+              </div>
+              {isOnlineActive && (
+                <span className="text-[10px] text-white/50 shrink-0">Active</span>
+              )}
+            </button>
+          )}
+
+          {(bestOnlineSub || (onlineSearchDone && !bestOnlineSub)) && (
+            <DropdownMenuSeparator className="bg-white/10" />
+          )}
+
+          {/* Jellyfin tracks — sorted with English first */}
+          {sortedTracks.map((track, i) => (
+            <DropdownMenuRadioItem
+              key={i}
+              value={String(track.index)}
+              className="px-5 py-2.5 transition-colors hover:bg-white/10 text-white"
+            >
+              <span className="text-white/90 ml-3">{track.label}</span>
+            </DropdownMenuRadioItem>
+          ))}
+
+          {!onlineSearching && sortedTracks.length === 0 && !bestOnlineSub && (
             <div className="px-5 py-2.5 text-white/40 text-sm">
               No subtitles available
             </div>
