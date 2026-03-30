@@ -125,11 +125,14 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
       try {
         const itemType = currentItem?.Type;
         const isEpisode = itemType === "Episode";
+
+        // For episodes, ALWAYS use the series-level provider IDs.
+        // Episode-level IMDB IDs are per-episode entries that Subdl doesn't
+        // match against — Subdl wants the series IMDB ID + season/episode number.
+        // Episode ProviderIds can also be wrong (e.g. mapped to a different show).
         let providerIds = (currentItem as any)?.ProviderIds;
 
-        // Episodes often don't have their own IMDB ID.
-        // Fetch the parent series to get the series-level IMDB/TMDB ID.
-        if (isEpisode && !providerIds?.Imdb && !providerIds?.Tmdb) {
+        if (isEpisode) {
           const seriesId = (currentItem as any)?.SeriesId;
           if (seriesId) {
             const series = await fetchMediaDetails(seriesId);
