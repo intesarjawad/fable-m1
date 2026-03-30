@@ -135,3 +135,35 @@ export async function getRivenConfig(): Promise<RivenConfig | null> {
 export async function removeRivenConfig() {
   (await cookies()).delete(RIVEN_CONFIG_KEY);
 }
+
+// --- TMDB config ---
+const TMDB_CONFIG_KEY = "tmdb-config";
+
+export interface TmdbConfig {
+  apiKey: string;
+}
+
+export async function setTmdbConfig(value: TmdbConfig) {
+  const cookieStore = await cookies();
+  cookieStore.set(TMDB_CONFIG_KEY, JSON.stringify(value), {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+  });
+}
+
+export async function getTmdbConfig(): Promise<TmdbConfig | null> {
+  const cookieStore = await cookies();
+  const raw = cookieStore.get(TMDB_CONFIG_KEY);
+  if (!raw?.value) return null;
+  try {
+    return JSON.parse(raw.value);
+  } catch {
+    return null;
+  }
+}
+
+export async function removeTmdbConfig() {
+  const cookieStore = await cookies();
+  cookieStore.delete(TMDB_CONFIG_KEY);
+}
