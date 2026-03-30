@@ -296,7 +296,15 @@ export function usePlaybackManager(): PlaybackContextValue {
             (s) => s.Type === "Audio",
           );
 
+          // Prefer English, then default, then alphabetical
           audioStreams.sort((a, b) => {
+            const aIsEnglish = (a.Language || "").toLowerCase().startsWith("eng") ||
+              (a.Language || "").toLowerCase() === "en";
+            const bIsEnglish = (b.Language || "").toLowerCase().startsWith("eng") ||
+              (b.Language || "").toLowerCase() === "en";
+            if (aIsEnglish && !bIsEnglish) return -1;
+            if (!aIsEnglish && bIsEnglish) return 1;
+
             const defA = a.IsDefault || false;
             const defB = b.IsDefault || false;
             if (defA && !defB) return -1;

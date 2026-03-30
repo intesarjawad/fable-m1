@@ -163,7 +163,16 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     }
 
     search();
-    return () => { cancelled = true; };
+
+    // Safety timeout — stop spinner after 8 seconds no matter what
+    const timeout = setTimeout(() => {
+      if (!cancelled) setSubdlLoading(false);
+    }, 8000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
   }, [open, subdlAvailable, subdlResults.length, subdlLoading, currentItem]);
 
   // Reset state when item changes
@@ -349,15 +358,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 
           <DropdownMenuSeparator className="bg-white/10" />
 
-          {/* Loading state */}
-          {subdlLoading && (
-            <div className="flex items-center gap-2.5 px-5 py-2.5 text-white/50">
-              <Loader2 size={14} className="animate-spin" />
-              <span className="text-sm">Finding subtitles...</span>
-            </div>
-          )}
-
-          {/* Merged subtitle list */}
+          {/* Merged subtitle list — always shows Jellyfin tracks immediately */}
           {mergedSubtitles.map((item, i) => {
             if (item.source === "jellyfin") {
               return (
@@ -400,6 +401,14 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
               </button>
             );
           })}
+
+          {/* Subdl loading indicator — below the list, non-blocking */}
+          {subdlLoading && (
+            <div className="flex items-center gap-2 px-5 py-2 text-white/30">
+              <Loader2 size={12} className="animate-spin" />
+              <span className="text-xs">Searching online...</span>
+            </div>
+          )}
 
           {/* Empty state — no subtitles found anywhere */}
           {!subdlLoading && mergedSubtitles.length === 0 && (
