@@ -205,7 +205,7 @@ export const SubtitleDisplay: React.FC<SubtitleDisplayProps> = ({
   // Load subtitle size from localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("aperture-subtitle-size");
+      const saved = localStorage.getItem("fable-subtitle-size");
       if (saved) {
         setSubtitleSize(parseInt(saved, 10));
       }
@@ -216,7 +216,7 @@ export const SubtitleDisplay: React.FC<SubtitleDisplayProps> = ({
   useEffect(() => {
     const handleStorageChange = () => {
       if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("aperture-subtitle-size");
+        const saved = localStorage.getItem("fable-subtitle-size");
         if (saved) {
           setSubtitleSize(parseInt(saved, 10));
         }

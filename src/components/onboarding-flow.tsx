@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { isAuthenticated, getServerUrl } from "../actions";
+import { isAuthenticated, getServerUrl, checkServerHealth, setServerUrl as saveServerUrl } from "../actions";
 import { ServerSetup } from "../components/server-setup";
 import { LoginForm } from "../components/login-form";
 import { ThemePreferenceStep } from "./theme-preference-step";
@@ -15,24 +15,38 @@ export function OnboardingFlow() {
   const router = useRouter();
   const [selectedTheme] = useAtom(themeSelectionAtom);
 
-  console.log("OnboardingFlow rendered, currentStep:", currentStep);
-
   useEffect(() => {
     const checkAuthStatus = async () => {
       const authenticated = await isAuthenticated();
       const serverUrl = await getServerUrl();
 
-      console.log("Auth status:", { authenticated, serverUrl });
-
-      // Check if user is already authenticated
       if (authenticated && serverUrl) {
         router.push("/");
         return;
-      } else if (serverUrl && !authenticated) {
-        setCurrentStep("login");
-      } else {
-        setCurrentStep("server");
       }
+
+      if (serverUrl) {
+        setCurrentStep("login");
+        return;
+      }
+
+      // Check if DEFAULT_SERVER_URL is configured
+      try {
+        const configRes = await fetch("/api/config");
+        const config = await configRes.json();
+        if (config.defaultServerUrl) {
+          const health = await checkServerHealth(config.defaultServerUrl);
+          if (health.success) {
+            await saveServerUrl(health.finalUrl || config.defaultServerUrl);
+            setCurrentStep("login");
+            return;
+          }
+        }
+      } catch {
+        // Ignore config fetch failures
+      }
+
+      setCurrentStep("server");
     };
 
     checkAuthStatus();

@@ -46,7 +46,7 @@ const defaultThemeSelection: ThemePresetSelection = {
 };
 
 export const themeSelectionAtom = atomWithStorage<ThemePresetSelection>(
-  "aperture-dashboard-theme",
+  "fable-dashboard-theme",
   defaultThemeSelection,
 );
 

@@ -15,7 +15,7 @@ interface CinematicSplashLoaderProps {
 export const CinematicSplashLoader: React.FC<CinematicSplashLoaderProps> = ({
   backdropUrl = "/assets/logo/backdrop.png",
   logoUrl = "/assets/logo/icon.png",
-  title = "Aperture",
+  title = "Fable",
   tagline = "Loading...",
 
   className,

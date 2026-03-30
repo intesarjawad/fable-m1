@@ -30,7 +30,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 
   const [subtitleSize, setSubtitleSize] = useState<number>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("aperture-subtitle-size");
+      const saved = localStorage.getItem("fable-subtitle-size");
       return saved ? parseInt(saved, 10) : 100;
     }
     return 100;
@@ -55,7 +55,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 
   const handleSubtitleSizeChange = (newSize: number) => {
     setSubtitleSize(newSize);
-    localStorage.setItem("aperture-subtitle-size", String(newSize));
+    localStorage.setItem("fable-subtitle-size", String(newSize));
     manager.reportState({ subtitleSize: newSize });
 
     window.dispatchEvent(

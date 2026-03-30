@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 
-const STORAGE_KEY = "aperture_device_id";
+const STORAGE_KEY = "fable_device_id";
 let cachedDeviceId: string | null = null;
 
 export function getDeviceId(): string {

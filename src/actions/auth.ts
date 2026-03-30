@@ -12,9 +12,9 @@ import { isAuthError } from "./media";
 // Type aliases for easier use
 type JellyfinUserWithToken = UserDto & { AccessToken?: string };
 
-const CLIENT_NAME = "Aperture";
+const CLIENT_NAME = "Fable";
 const CLIENT_VERSION = "1.0.0";
-const DEVICE_NAME = "Aperture Web Client";
+const DEVICE_NAME = "Fable Web Client";
 
 export interface QuickConnectResult {
   Authenticated?: boolean;

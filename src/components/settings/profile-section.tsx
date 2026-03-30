@@ -220,7 +220,7 @@ export default function ProfileSection() {
   const profileTiles = [
     {
       title: "Password",
-      description: "Change the credentials you use to access Apertúre.",
+      description: "Change the credentials you use to sign in.",
       icon: Lock,
       cta: "Update password",
       action: () => router.push("/password"),

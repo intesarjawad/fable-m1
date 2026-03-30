@@ -281,20 +281,15 @@ export function AppSidebar() {
                 <div className="text-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                   <Image
                     src={"/assets/logo/icon.png"}
-                    alt="Apertúre Logo"
+                    alt="Logo"
                     className="rounded"
                     width={32}
                     height={32}
                   />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">Apertúre</span>
-                  <span className="text-xs">
-                    {serverUrl &&
-                      new URL(serverUrl).hostname.replace(
-                        /^(jellyfin\.|www\.)/,
-                        "",
-                      )}
+                  <span className="font-semibold">
+                    {serverUrl ? new URL(serverUrl).hostname.split('.')[0].replace(/^(jellyfin|www)$/, 'Fable') : "Fable"}
                   </span>
                 </div>
               </Link>
