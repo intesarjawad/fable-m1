@@ -6,13 +6,6 @@ import React, {
   useCallback,
   FormEvent,
 } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { VibrantAuroraBackground } from "../components/vibrant-aurora-background";
@@ -26,19 +19,14 @@ import {
 } from "../actions";
 import {
   Loader2,
-  User,
   ArrowLeft,
   RefreshCcw,
   AlertCircle,
   ShieldCheck,
+  Play,
+  Lock,
+  Zap,
 } from "lucide-react";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "../components/ui/tabs";
-import { Checkbox } from "../components/ui/checkbox";
 import { StoreLoginPreferences } from "../actions/store/store-login-preferences";
 
 interface LoginFormProps {
@@ -58,6 +46,7 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [serverName, setServerName] = useState("Fable");
 
   const [authMethod, setAuthMethod] = useState<AuthMethod>("password");
   const [quickConnectSupported, setQuickConnectSupported] = useState<
@@ -90,6 +79,21 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
         setUsername(prefs.username);
       }
     })();
+
+    // Get server name from URL
+    (async () => {
+      const url = await getServerUrl();
+      if (url && isMountedRef.current) {
+        try {
+          const hostname = new URL(url).hostname;
+          const name = hostname.split(".")[0];
+          if (name && name !== "jellyfin" && name !== "www") {
+            setServerName(name.charAt(0).toUpperCase() + name.slice(1));
+          }
+        } catch {}
+      }
+    })();
+
     return () => {
       isMountedRef.current = false;
       stopQuickConnectPolling();
@@ -98,19 +102,14 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
 
   useEffect(() => {
     let active = true;
-
     isQuickConnectEnabled()
       .then((enabled) => {
         if (!active) return;
         setQuickConnectSupported(enabled);
       })
-      .catch((reason) => {
-        console.warn("Failed to check Quick Connect availability:", reason);
-        if (active) {
-          setQuickConnectSupported(false);
-        }
+      .catch(() => {
+        if (active) setQuickConnectSupported(false);
       });
-
     return () => {
       active = false;
     };
@@ -128,21 +127,16 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
 
     try {
       const status = await getQuickConnectStatus(secret);
-      if (!status) {
-        return;
-      }
+      if (!status) return;
 
       const nextSecret = status.Secret || secret;
       lastSecretRef.current = nextSecret;
 
       if (status.Code) {
-        setQuickConnectSession({
-          code: status.Code,
-          secret: nextSecret,
-        });
+        setQuickConnectSession({ code: status.Code, secret: nextSecret });
       } else {
-        setQuickConnectSession((previous) =>
-          previous ? { ...previous, secret: nextSecret } : previous,
+        setQuickConnectSession((prev) =>
+          prev ? { ...prev, secret: nextSecret } : prev,
         );
       }
 
@@ -150,31 +144,23 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
         stopQuickConnectPolling();
         const success = await authenticateWithQuickConnect(nextSecret);
         if (!isMountedRef.current) return;
-
         if (success) {
           onSuccess();
           return;
         }
-
-        setQuickConnectError(
-          "Quick Connect was approved, but we couldn't finish signing you in. Please try again or use your password.",
-        );
+        setQuickConnectError("Quick Connect approved but sign-in failed. Try again or use your password.");
       }
-    } catch (pollError) {
-      console.error("Quick Connect polling error:", pollError);
+    } catch (err) {
       stopQuickConnectPolling();
       if (!isMountedRef.current) return;
       setQuickConnectError(
-        pollError instanceof Error
-          ? pollError.message
-          : "We couldn't check the Quick Connect status. Please try again.",
+        err instanceof Error ? err.message : "Could not check Quick Connect status.",
       );
     }
   }, [onSuccess, stopQuickConnectPolling]);
 
   const startQuickConnect = useCallback(async () => {
     if (quickConnectLoading) return;
-
     setQuickConnectLoading(true);
     setQuickConnectError(null);
     setQuickConnectSession(null);
@@ -184,37 +170,24 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
     try {
       const session = await initiateQuickConnect();
       if (!isMountedRef.current) return;
-
-      if (!session || !session.Secret || !session.Code) {
-        throw new Error(
-          "Quick Connect did not return a valid code. Please try again.",
-        );
+      if (!session?.Secret || !session?.Code) {
+        throw new Error("Quick Connect did not return a valid code.");
       }
-
-      setQuickConnectSession({
-        code: session.Code,
-        secret: session.Secret,
-      });
+      setQuickConnectSession({ code: session.Code, secret: session.Secret });
       lastSecretRef.current = session.Secret;
-
       await pollQuickConnectStatus();
       pollTimerRef.current = window.setInterval(() => {
         void pollQuickConnectStatus();
       }, 4000);
-    } catch (initError) {
-      console.error("Unable to start Quick Connect:", initError);
+    } catch (err) {
       if (!isMountedRef.current) return;
       setQuickConnectError(
-        initError instanceof Error
-          ? initError.message
-          : "Unable to start Quick Connect. Please try again or use your password.",
+        err instanceof Error ? err.message : "Unable to start Quick Connect.",
       );
       setQuickConnectSession(null);
       stopQuickConnectPolling();
     } finally {
-      if (isMountedRef.current) {
-        setQuickConnectLoading(false);
-      }
+      if (isMountedRef.current) setQuickConnectLoading(false);
     }
   }, [pollQuickConnectStatus, quickConnectLoading, stopQuickConnectPolling]);
 
@@ -223,26 +196,10 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
       stopQuickConnectPolling();
       return;
     }
-
-    if (quickConnectSupported !== true) {
-      return;
-    }
-
-    if (quickConnectSession || quickConnectLoading) {
-      return;
-    }
-
-    startQuickConnect().catch((error) =>
-      console.error("Quick Connect start error:", error),
-    );
-  }, [
-    authMethod,
-    quickConnectSupported,
-    quickConnectSession,
-    quickConnectLoading,
-    startQuickConnect,
-    stopQuickConnectPolling,
-  ]);
+    if (quickConnectSupported !== true) return;
+    if (quickConnectSession || quickConnectLoading) return;
+    startQuickConnect().catch(() => {});
+  }, [authMethod, quickConnectSupported, quickConnectSession, quickConnectLoading, startQuickConnect, stopQuickConnectPolling]);
 
   const handlePasswordSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -250,221 +207,204 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
       setError("Please enter a username");
       return;
     }
-
     setIsLoading(true);
     setError("");
-
     try {
       const success = await authenticateUser(username, password);
-      if (success) {
-        onSuccess();
-      } else {
-        setError("Invalid username or password. Please try again.");
-      }
+      if (success) onSuccess();
+      else setError("Invalid username or password");
     } catch {
-      setError("Authentication failed. Please try again.");
+      setError("Authentication failed");
     } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
+      if (isMountedRef.current) setIsLoading(false);
     }
   };
 
-  const handleBack = useCallback(() => {
-    stopQuickConnectPolling();
-    setQuickConnectSession(null);
-    setQuickConnectError(null);
-    onBack();
-  }, [onBack, stopQuickConnectPolling]);
-
   const quickConnectAvailable = quickConnectSupported === true;
-  const quickConnectChecking = quickConnectSupported === null;
-  const tabsListClass =
-    quickConnectAvailable || quickConnectChecking
-      ? "grid w-full grid-cols-2"
-      : "grid w-full grid-cols-1";
-
   const formattedCode = quickConnectSession?.code
     ? quickConnectSession.code.replace(/(.{3})/g, "$1 ").trim()
     : "------";
 
   return (
-    <div className="relative flex min-h-screen w-full items-center justify-center bg-background p-4">
-      <VibrantAuroraBackground amplitude={0.8} blend={0.4} />
-      <Card className="relative z-10 w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mb-4 flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleBack}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div className="mx-auto w-fit rounded-full bg-primary/10 p-3">
-              <User className="h-8 w-8 text-primary" />
-            </div>
-            <div className="w-10" />
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#050508]">
+      <VibrantAuroraBackground amplitude={0.6} blend={0.3} />
+
+      {/* Grain overlay */}
+      <div
+        className="pointer-events-none fixed inset-0 z-10 opacity-[0.025]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+        }}
+      />
+
+      <div className="relative z-20 flex w-full max-w-sm flex-col items-center px-6">
+        {/* Branding */}
+        <div className="mb-10 flex flex-col items-center gap-3">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 backdrop-blur-sm border border-white/[0.06] shadow-lg shadow-black/20">
+            <Play className="h-6 w-6 text-white/80 fill-white/80" />
           </div>
-          <CardTitle className="text-2xl">Sign In</CardTitle>
-          <CardDescription>
-            Use your Jellyfin credentials or Quick Connect
-          </CardDescription>
-        </CardHeader>
+          <div className="text-center">
+            <h1 className="text-2xl font-bold tracking-tight text-white/90">
+              {serverName}
+            </h1>
+            <p className="mt-1 text-sm text-white/35">
+              Sign in to start watching
+            </p>
+          </div>
+        </div>
 
-        <CardContent className="pt-2">
-          <Tabs
-            value={authMethod}
-            onValueChange={(value) => setAuthMethod(value as AuthMethod)}
-            className="w-full"
-          >
-            <TabsList className={tabsListClass}>
-              <TabsTrigger value="password">Password</TabsTrigger>
-              {(quickConnectAvailable || quickConnectChecking) && (
-                <TabsTrigger
-                  value="quickconnect"
-                  disabled={!quickConnectAvailable}
+        {/* Glass card */}
+        <div
+          className="w-full rounded-2xl border border-white/[0.06] p-6 backdrop-blur-xl"
+          style={{
+            background: "rgba(255, 255, 255, 0.02)",
+            boxShadow: "0 16px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
+          }}
+        >
+          {/* Auth method toggle */}
+          {quickConnectAvailable && (
+            <div className="mb-6 flex rounded-xl bg-white/[0.03] border border-white/[0.06] p-1">
+              <button
+                onClick={() => setAuthMethod("password")}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-all duration-200 ${
+                  authMethod === "password"
+                    ? "bg-white/[0.08] text-white shadow-sm"
+                    : "text-white/40 hover:text-white/60"
+                }`}
+              >
+                <Lock className="h-3 w-3" />
+                Password
+              </button>
+              <button
+                onClick={() => setAuthMethod("quickconnect")}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-all duration-200 ${
+                  authMethod === "quickconnect"
+                    ? "bg-white/[0.08] text-white shadow-sm"
+                    : "text-white/40 hover:text-white/60"
+                }`}
+              >
+                <Zap className="h-3 w-3" />
+                Quick Connect
+              </button>
+            </div>
+          )}
+
+          {authMethod === "password" ? (
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="username"
+                  className="block text-xs font-medium text-white/50 uppercase tracking-wider"
                 >
-                  Quick Connect
-                </TabsTrigger>
+                  Username
+                </label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  disabled={isLoading}
+                  autoComplete="username"
+                  className="h-11 rounded-xl border-white/[0.06] bg-white/[0.03] text-white placeholder:text-white/20 focus:border-white/15 focus:ring-white/10"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="password"
+                  className="block text-xs font-medium text-white/50 uppercase tracking-wider"
+                >
+                  Password
+                </label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                  autoComplete="current-password"
+                  className="h-11 rounded-xl border-white/[0.06] bg-white/[0.03] text-white placeholder:text-white/20 focus:border-white/15 focus:ring-white/10"
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-400">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span>{error}</span>
+                </div>
               )}
-            </TabsList>
 
-            <TabsContent value="password" className="mt-6">
-              <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="username"
-                    className="mb-2 block text-sm font-medium"
-                  >
-                    Username
-                  </label>
-                  <Input
-                    id="username"
-                    type="text"
-                    placeholder="Enter your username"
-                    value={username}
-                    onChange={(event) => setUsername(event.target.value)}
-                    disabled={isLoading}
-                    autoComplete="username"
-                    className={error ? "border-red-500" : ""}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="password"
-                    className="mb-2 block text-sm font-medium"
-                  >
-                    Password
-                  </label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    disabled={isLoading}
-                    autoComplete="current-password"
-                    className={error ? "border-red-500" : ""}
-                  />
-                </div>
-
-                {error && (
-                  <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                    <AlertCircle className="mt-0.5 h-4 w-4" />
-                    <span>{error}</span>
-                  </div>
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="h-11 w-full rounded-xl bg-white/90 text-black font-semibold hover:bg-white transition-colors"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  "Sign In"
                 )}
+              </Button>
+            </form>
+          ) : (
+            <div className="space-y-4">
+              {quickConnectError && (
+                <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-400">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span>{quickConnectError}</span>
+                </div>
+              )}
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Signing In...
-                    </>
-                  ) : (
-                    "Sign In"
-                  )}
-                </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="quickconnect" className="mt-6">
-              {quickConnectChecking && (
-                <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+              {!quickConnectError && !quickConnectSession && quickConnectLoading && (
+                <div className="flex items-center justify-center gap-2 py-8 text-sm text-white/40">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Checking Quick Connect availability…
+                  Generating code...
                 </div>
               )}
 
-              {quickConnectSupported === false && (
-                <div className="flex items-start gap-2 rounded-md border border-border/80 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
-                  <AlertCircle className="mt-0.5 h-4 w-4" />
-                  This Jellyfin server has Quick Connect disabled. Please use
-                  your username and password instead.
+              {quickConnectSession && (
+                <div className="space-y-5 text-center">
+                  <div className="flex items-center justify-center gap-2 text-xs text-white/40">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Approve from any signed-in device
+                  </div>
+                  <div
+                    className="mx-auto w-fit rounded-xl border border-white/[0.08] bg-white/[0.03] px-8 py-4 font-mono text-3xl font-bold tracking-[0.5em] text-white"
+                    style={{
+                      boxShadow: "0 0 40px rgba(255, 255, 255, 0.03)",
+                    }}
+                  >
+                    {formattedCode}
+                  </div>
+                  <p className="text-xs leading-relaxed text-white/30">
+                    Open Jellyfin on a signed-in device, go to{" "}
+                    <span className="text-white/50 font-medium">Quick Connect</span>, and enter the code above.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => startQuickConnect().catch(() => {})}
+                    disabled={quickConnectLoading}
+                    className="text-xs text-white/40 hover:text-white/60"
+                  >
+                    <RefreshCcw className="mr-1.5 h-3 w-3" />
+                    New code
+                  </Button>
                 </div>
               )}
+            </div>
+          )}
+        </div>
 
-              {quickConnectAvailable && (
-                <div className="space-y-5">
-                  {quickConnectError && (
-                    <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                      <AlertCircle className="mt-0.5 h-4 w-4" />
-                      <span>{quickConnectError}</span>
-                    </div>
-                  )}
-
-                  {!quickConnectError &&
-                    !quickConnectSession &&
-                    quickConnectLoading && (
-                      <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Generating Quick Connect code…
-                      </div>
-                    )}
-
-                  {quickConnectSession && (
-                    <div className="space-y-4 text-center">
-                      <div className="flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground">
-                        <ShieldCheck className="h-4 w-4 text-primary" />
-                        Approve this device from any signed-in Jellyfin session
-                      </div>
-                      <div className="font-mono text-4xl font-semibold tracking-[0.6em] text-primary">
-                        {formattedCode}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Open Jellyfin on a device that&apos;s already signed in,
-                        go to <span className="font-medium">Quick Connect</span>
-                        , and enter the code above. We&apos;ll finish signing
-                        you in automatically.
-                      </p>
-                      <div className="flex flex-wrap items-center justify-center gap-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() =>
-                            startQuickConnect().catch((error) =>
-                              console.error(
-                                "Quick Connect refresh error:",
-                                error,
-                              ),
-                            )
-                          }
-                          disabled={quickConnectLoading}
-                        >
-                          <RefreshCcw className="mr-2 h-4 w-4" />
-                          Generate new code
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+        {/* Footer */}
+        <p className="mt-8 text-[11px] text-white/15">
+          Powered by Jellyfin
+        </p>
+      </div>
     </div>
   );
 }
