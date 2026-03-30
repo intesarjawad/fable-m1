@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "../../../components/ui/dropdown-menu";
-import { Captions, Type, Globe, Loader2, Ear } from "lucide-react";
+import { Captions, Type, Loader2, Ear, Download } from "lucide-react";
 import { PlaybackContextValue } from "../../hooks/usePlaybackManager";
 import { getSubtitleTracks } from "../../../actions";
 import { searchSubdlSubtitles, isSubdlConfigured } from "../../../actions/subdl";
@@ -19,6 +19,55 @@ interface SubtitleTracksMenuProps {
   manager: PlaybackContextValue;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+/** Unified subtitle item — either from Jellyfin or Subdl */
+interface MergedSubtitleItem {
+  source: "jellyfin" | "subdl";
+  label: string;
+  sublabel?: string;
+  language: string; // normalized lowercase: "en", "es", "fr"
+  hearingImpaired: boolean;
+  // Jellyfin-specific
+  jellyfinIndex?: number;
+  // Subdl-specific
+  subdlSubtitle?: SubdlSubtitle;
+  subdlIndex?: number;
+}
+
+function normalizeLanguageCode(code: string): string {
+  const lower = code.toLowerCase().trim();
+  // Map common variations to ISO 639-1
+  const languageMap: Record<string, string> = {
+    en: "en", eng: "en", english: "en",
+    es: "es", spa: "es", spanish: "es",
+    fr: "fr", fre: "fr", fra: "fr", french: "fr",
+    de: "de", ger: "de", deu: "de", german: "de",
+    it: "it", ita: "it", italian: "it",
+    pt: "pt", por: "pt", portuguese: "pt",
+    ja: "ja", jpn: "ja", japanese: "ja",
+    ko: "ko", kor: "ko", korean: "ko",
+    zh: "zh", chi: "zh", zho: "zh", chinese: "zh",
+    ar: "ar", ara: "ar", arabic: "ar",
+    hi: "hi", hin: "hi", hindi: "hi",
+    ru: "ru", rus: "ru", russian: "ru",
+    nl: "nl", dut: "nl", nld: "nl", dutch: "nl",
+    sv: "sv", swe: "sv", swedish: "sv",
+    da: "da", dan: "da", danish: "da",
+    no: "no", nor: "no", norwegian: "no",
+    fi: "fi", fin: "fi", finnish: "fi",
+    pl: "pl", pol: "pl", polish: "pl",
+    tr: "tr", tur: "tr", turkish: "tr",
+    th: "th", tha: "th", thai: "th",
+    vi: "vi", vie: "vi", vietnamese: "vi",
+    id: "id", ind: "id", indonesian: "id",
+    ms: "ms", may: "ms", msa: "ms", malay: "ms",
+  };
+  return languageMap[lower] || lower;
+}
+
+function isEnglish(languageCode: string): boolean {
+  return normalizeLanguageCode(languageCode) === "en";
 }
 
 export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
@@ -32,7 +81,6 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
   const [subdlResults, setSubdlResults] = useState<SubdlSubtitle[]>([]);
   const [subdlAvailable, setSubdlAvailable] = useState(false);
   const [subdlLoading, setSubdlLoading] = useState(false);
-  const [subdlSearched, setSubdlSearched] = useState(false);
   const [loadingSubdlIndex, setLoadingSubdlIndex] = useState<number | null>(null);
 
   const [subtitleSize, setSubtitleSize] = useState<number>(() => {
@@ -43,6 +91,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     return 100;
   });
 
+  // Fetch Jellyfin tracks
   useEffect(() => {
     async function fetchTracks() {
       if (currentItem?.Id && currentMediaSource?.Id) {
@@ -65,42 +114,107 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     isSubdlConfigured().then(setSubdlAvailable);
   }, []);
 
-  // Reset Subdl state when item changes
+  // Auto-search Subdl when menu opens
   useEffect(() => {
-    setSubdlResults([]);
-    setSubdlSearched(false);
-  }, [currentItem?.Id]);
+    if (!open || !subdlAvailable || subdlResults.length > 0 || subdlLoading) return;
 
-  const handleSearchOnline = async () => {
     const imdbId = (currentItem as any)?.ProviderIds?.Imdb;
     if (!imdbId) return;
 
     setSubdlLoading(true);
-    try {
-      const itemType = currentItem?.Type;
-      const isEpisode = itemType === "Episode";
+    const itemType = currentItem?.Type;
+    const isEpisode = itemType === "Episode";
 
-      const result = await searchSubdlSubtitles(imdbId, {
-        type: isEpisode ? "tv" : "movie",
-        seasonNumber: isEpisode ? (currentItem as any)?.ParentIndexNumber : undefined,
-        episodeNumber: isEpisode ? (currentItem as any)?.IndexNumber : undefined,
-        languages: "EN",
+    searchSubdlSubtitles(imdbId, {
+      type: isEpisode ? "tv" : "movie",
+      seasonNumber: isEpisode ? (currentItem as any)?.ParentIndexNumber : undefined,
+      episodeNumber: isEpisode ? (currentItem as any)?.IndexNumber : undefined,
+      languages: "EN",
+    })
+      .then((result) => setSubdlResults(result.subtitles))
+      .catch(() => {})
+      .finally(() => setSubdlLoading(false));
+  }, [open, subdlAvailable, subdlResults.length, subdlLoading, currentItem]);
+
+  // Reset state when item changes
+  useEffect(() => {
+    setSubdlResults([]);
+  }, [currentItem?.Id]);
+
+  // Build merged + sorted subtitle list
+  const mergedSubtitles = useMemo(() => {
+    const items: MergedSubtitleItem[] = [];
+
+    // Add Jellyfin tracks
+    for (const track of subtitleTracks) {
+      const language = track.language || "";
+      items.push({
+        source: "jellyfin",
+        label: track.label || "Unknown",
+        language,
+        hearingImpaired: track.label?.toLowerCase().includes("sdh") ||
+          track.label?.toLowerCase().includes("hearing") || false,
+        jellyfinIndex: track.index,
       });
-
-      setSubdlResults(result.subtitles);
-      setSubdlSearched(true);
-    } catch {
-      setSubdlSearched(true);
-    } finally {
-      setSubdlLoading(false);
     }
-  };
+
+    // Add Subdl results, deduplicating against Jellyfin tracks
+    // A Subdl result is redundant if Jellyfin already has a track with
+    // the same normalized language AND same HI status
+    const jellyfinLanguageHiSet = new Set(
+      items.map((item) => {
+        const normalizedLanguage = normalizeLanguageCode(item.language);
+        return `${normalizedLanguage}:${item.hearingImpaired}`;
+      })
+    );
+
+    for (let i = 0; i < subdlResults.length && i < 10; i++) {
+      const subtitle = subdlResults[i];
+      const normalizedLanguage = normalizeLanguageCode(subtitle.languageCode);
+      const dedupeKey = `${normalizedLanguage}:${subtitle.hearingImpaired}`;
+
+      // Skip first match per language+HI combo (Jellyfin already has one)
+      // But allow additional Subdl results (different releases/quality)
+      const jellyfinHasMatch = jellyfinLanguageHiSet.has(dedupeKey);
+
+      items.push({
+        source: "subdl",
+        label: subtitle.releaseName,
+        sublabel: subtitle.language +
+          (subtitle.author && subtitle.author !== "none" ? ` \u00b7 ${subtitle.author}` : ""),
+        language: subtitle.languageCode,
+        hearingImpaired: subtitle.hearingImpaired,
+        subdlSubtitle: subtitle,
+        subdlIndex: i,
+      });
+    }
+
+    // Sort: English first, then alphabetically by language.
+    // Within each language group: Jellyfin (instant) before Subdl (download).
+    items.sort((a, b) => {
+      const aIsEnglish = isEnglish(a.language);
+      const bIsEnglish = isEnglish(b.language);
+      if (aIsEnglish && !bIsEnglish) return -1;
+      if (!aIsEnglish && bIsEnglish) return 1;
+
+      // Same language priority — Jellyfin first
+      const langCompare = normalizeLanguageCode(a.language).localeCompare(
+        normalizeLanguageCode(b.language)
+      );
+      if (langCompare !== 0) return langCompare;
+
+      if (a.source === "jellyfin" && b.source === "subdl") return -1;
+      if (a.source === "subdl" && b.source === "jellyfin") return 1;
+
+      return 0;
+    });
+
+    return items;
+  }, [subtitleTracks, subdlResults]);
 
   const handleSelectSubdl = async (subtitle: SubdlSubtitle, index: number) => {
     setLoadingSubdlIndex(index);
     try {
-      // Fetch the subtitle via our download proxy (extracts from zip server-side)
-      // Also passes itemId so the proxy saves it to Jellyfin for future users
       const params = new URLSearchParams({
         path: subtitle.url,
         ...(currentItem?.Id ? { itemId: currentItem.Id } : {}),
@@ -120,7 +234,6 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     setSubtitleSize(newSize);
     localStorage.setItem("fable-subtitle-size", String(newSize));
     manager.reportState({ subtitleSize: newSize });
-
     window.dispatchEvent(
       new CustomEvent("subtitle-size-change", { detail: { size: newSize } }),
     );
@@ -128,9 +241,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 
   const handleSubtitleChange = (indexStr: string) => {
     const index = parseInt(indexStr);
-    if (isNaN(index)) {
-      return;
-    }
+    if (isNaN(index)) return;
 
     if (index === 9999) {
       manager.reportState({ subtitleStreamIndex: 9999 });
@@ -148,7 +259,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
       <DropdownMenuContent
         sideOffset={8}
         side="top"
-        className="w-56 rounded-2xl overflow-hidden text-sm z-100 max-h-[60vh] overflow-y-auto"
+        className="w-64 rounded-2xl overflow-hidden text-sm z-100 max-h-[60vh] overflow-y-auto"
         style={{
           background: "rgba(30, 30, 30, 0.65)",
           backdropFilter: "blur(40px)",
@@ -161,6 +272,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
           value={String(playbackState.subtitleStreamIndex ?? -1)}
           onValueChange={handleSubtitleChange}
         >
+          {/* Off */}
           <DropdownMenuRadioItem
             value="-1"
             className="px-5 py-2.5 transition-colors hover:bg-white/10 text-white"
@@ -168,6 +280,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
             <span className="text-white/90 ml-3">Off</span>
           </DropdownMenuRadioItem>
 
+          {/* Size slider */}
           <div
             style={{
               display: "flex",
@@ -181,7 +294,6 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
               size={18}
               style={{ color: "rgba(255, 255, 255, 0.7)", flexShrink: 0 }}
             />
-
             <input
               type="range"
               min="10"
@@ -200,90 +312,72 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
                   WebkitAppearance: "none",
                   appearance: "none",
                   cursor: "pointer",
-                } as React.CSSProperties & {
-                  WebkitAppearance?: string;
-                }
+                } as React.CSSProperties & { WebkitAppearance?: string }
               }
             />
           </div>
 
           <DropdownMenuSeparator className="bg-white/10" />
 
-          {subtitleTracks.map((track, i) => (
-            <DropdownMenuRadioItem
-              key={i}
-              value={String(track.index)}
-              className="px-5 py-2.5 transition-colors hover:bg-white/10 text-white"
-            >
-              <span className="text-white/90 ml-3">{track.label}</span>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
+          {/* Loading state */}
+          {subdlLoading && (
+            <div className="flex items-center gap-2.5 px-5 py-2.5 text-white/50">
+              <Loader2 size={14} className="animate-spin" />
+              <span className="text-sm">Finding subtitles...</span>
+            </div>
+          )}
 
-        {/* Subdl online search section */}
-        {subdlAvailable && (
-          <>
-            <DropdownMenuSeparator className="bg-white/10" />
+          {/* Merged subtitle list */}
+          {mergedSubtitles.map((item, i) => {
+            if (item.source === "jellyfin") {
+              return (
+                <DropdownMenuRadioItem
+                  key={`jf-${item.jellyfinIndex}`}
+                  value={String(item.jellyfinIndex)}
+                  className="px-5 py-2 transition-colors hover:bg-white/10 text-white"
+                >
+                  <span className="text-white/90 ml-3 text-sm">{item.label}</span>
+                </DropdownMenuRadioItem>
+              );
+            }
 
-            {!subdlSearched ? (
+            // Subdl item — custom button (not a radio item, triggers download)
+            const subdlIdx = item.subdlIndex!;
+            return (
               <button
+                key={`subdl-${subdlIdx}`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleSearchOnline();
+                  handleSelectSubdl(item.subdlSubtitle!, subdlIdx);
                 }}
-                disabled={subdlLoading}
-                className="w-full flex items-center gap-2.5 px-5 py-2.5 text-white/70 hover:text-white hover:bg-white/10 transition-colors text-left"
+                disabled={loadingSubdlIndex !== null}
+                className="w-full flex items-center gap-2.5 px-5 py-2 text-white/90 hover:bg-white/10 transition-colors text-left"
               >
-                {subdlLoading ? (
-                  <Loader2 size={14} className="animate-spin shrink-0" />
+                {loadingSubdlIndex === subdlIdx ? (
+                  <Loader2 size={12} className="animate-spin shrink-0 ml-0.5" />
+                ) : item.hearingImpaired ? (
+                  <Ear size={12} className="shrink-0 text-white/40 ml-0.5" />
                 ) : (
-                  <Globe size={14} className="shrink-0" />
+                  <Download size={12} className="shrink-0 text-white/25 ml-0.5" />
                 )}
-                <span className="text-sm">
-                  {subdlLoading ? "Searching..." : "Search online"}
-                </span>
-              </button>
-            ) : subdlResults.length === 0 ? (
-              <div className="px-5 py-2.5 text-white/40 text-sm">
-                No online subtitles found
-              </div>
-            ) : (
-              <>
-                <div className="px-5 py-1.5 text-white/40 text-[11px] uppercase tracking-wider font-medium">
-                  Online
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm truncate">{item.label}</p>
+                  {item.sublabel && (
+                    <p className="text-[11px] text-white/40 truncate">{item.sublabel}</p>
+                  )}
                 </div>
-                {subdlResults.slice(0, 8).map((subtitle, i) => (
-                  <button
-                    key={i}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleSelectSubdl(subtitle, i);
-                    }}
-                    disabled={loadingSubdlIndex !== null}
-                    className="w-full flex items-center gap-2.5 px-5 py-2 text-white/90 hover:bg-white/10 transition-colors text-left"
-                  >
-                    {loadingSubdlIndex === i ? (
-                      <Loader2 size={12} className="animate-spin shrink-0" />
-                    ) : subtitle.hearingImpaired ? (
-                      <Ear size={12} className="shrink-0 text-white/50" />
-                    ) : (
-                      <div className="w-3 shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm truncate">{subtitle.releaseName}</p>
-                      <p className="text-[11px] text-white/40 truncate">
-                        {subtitle.language}
-                        {subtitle.author && subtitle.author !== "none" ? ` \u00b7 ${subtitle.author}` : ""}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </>
-            )}
-          </>
-        )}
+              </button>
+            );
+          })}
+
+          {/* Empty state — no subtitles found anywhere */}
+          {!subdlLoading && mergedSubtitles.length === 0 && (
+            <div className="px-5 py-2.5 text-white/40 text-sm">
+              No subtitles available
+            </div>
+          )}
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
