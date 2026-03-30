@@ -120,6 +120,7 @@ export {
   updateTaskTriggers,
 } from "./scheduled-tasks";
 export { fetchActivityLogEntries } from "./activity-log";
+export { isTmdbConfigured } from "./tmdb";
 
 // Types
 export type {
