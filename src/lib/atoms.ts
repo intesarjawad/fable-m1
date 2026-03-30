@@ -2,6 +2,7 @@ import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models/base-item-dto";
 import { JellyfinItem } from "@/src/types/jellyfin";
+import type { TmdbMediaItem, TmdbMovie, TmdbTvShow } from "@/src/types/tmdb";
 
 // Global loading state for dashboard
 export const dashboardLoadingAtom = atom(false);
@@ -68,3 +69,9 @@ export const heroLastVisitedTimeAtom = atom(0); // Last visited time for hero se
 // TMDB → Jellyfin cross-reference: Map<tmdbId, { jellyfinId, type }>
 export const jellyfinTmdbMapAtom = atom<Map<number, { jellyfinId: string; type: string }>>(new Map());
 export const jellyfinTmdbMapLoadedAtom = atom(false);
+
+// Discovery: TMDB trending & popular data for the home page
+export const homeTrendingAtom = atom<TmdbMediaItem[]>([]);
+export const homePopularMoviesAtom = atom<TmdbMovie[]>([]);
+export const homePopularTvAtom = atom<TmdbTvShow[]>([]);
+export const discoveryLastFetchedAtom = atom(0);
