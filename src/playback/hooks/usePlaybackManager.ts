@@ -180,8 +180,9 @@ export function usePlaybackManager(): PlaybackContextValue {
       const hasMediaSources =
         itemToPlay.MediaSources && itemToPlay.MediaSources.length > 0;
       const hasTrickplay = !!(itemToPlay as any).Trickplay;
+      const hasProviderIds = !!(itemToPlay as any).ProviderIds;
 
-      if (!hasMediaSources || !hasTrickplay) {
+      if (!hasMediaSources || !hasTrickplay || !hasProviderIds) {
         try {
           const fullItem = await fetchMediaDetails(itemToPlay.Id!);
           if (fullItem) {
