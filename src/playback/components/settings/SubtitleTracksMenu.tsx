@@ -100,7 +100,14 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     setLoadingSubdlIndex(index);
     try {
       // Fetch the subtitle via our download proxy (extracts from zip server-side)
-      const downloadUrl = `/api/subdl/download?path=${encodeURIComponent(subtitle.url)}`;
+      // Also passes itemId so the proxy saves it to Jellyfin for future users
+      const params = new URLSearchParams({
+        path: subtitle.url,
+        ...(currentItem?.Id ? { itemId: currentItem.Id } : {}),
+        language: subtitle.languageCode.toLowerCase() || "eng",
+        ...(subtitle.hearingImpaired ? { hi: "true" } : {}),
+      });
+      const downloadUrl = `/api/subdl/download?${params}`;
       await manager.setSubtitleUrl(downloadUrl);
     } catch (error) {
       console.error("Failed to load Subdl subtitle:", error);
