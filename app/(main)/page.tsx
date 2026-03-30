@@ -38,6 +38,7 @@ import { useRouter } from "next/navigation";
 import ErrorWindow from "@/src/components/error-window";
 import { TrendingUp, Flame } from "lucide-react";
 import { useRequestState } from "@/src/hooks/use-request-state";
+import { useReconcileRequests } from "@/src/hooks/use-reconcile-requests";
 import { tmdbPosterUrl } from "@/src/lib/tmdb";
 import { OptimizedImage } from "@/src/components/optimized-image";
 import { ScrollArea, ScrollBar } from "@/src/components/ui/scroll-area";
@@ -60,6 +61,7 @@ export default function Home() {
   const [discoveryLastFetched, setDiscoveryLastFetched] = useAtom(discoveryLastFetchedAtom);
 
   const { activeRequests } = useRequestState();
+  useReconcileRequests();
   const { handleAuthError } = useAuthError();
   const [loading, setLoading] = useState<boolean>(true);
 
