@@ -129,35 +129,49 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
         // For episodes, ALWAYS use the series-level provider IDs.
         // Episode-level IMDB IDs are per-episode entries that Subdl doesn't
         // match against — Subdl wants the series IMDB ID + season/episode number.
-        // Episode ProviderIds can also be wrong (e.g. mapped to a different show).
         let providerIds = (currentItem as any)?.ProviderIds;
 
         if (isEpisode) {
           const seriesId = (currentItem as any)?.SeriesId;
           if (seriesId) {
-            const series = await fetchMediaDetails(seriesId);
-            if (series?.ProviderIds) {
-              providerIds = series.ProviderIds;
+            try {
+              const series = await fetchMediaDetails(seriesId);
+              if (series?.ProviderIds) {
+                providerIds = series.ProviderIds;
+              }
+            } catch {
+              // Series fetch failed — use episode's own IDs as fallback
             }
           }
         }
 
         const imdbId = providerIds?.Imdb;
         const tmdbId = providerIds?.Tmdb;
-        if (!imdbId && !tmdbId) {
-          if (!cancelled) setSubdlLoading(false);
-          return;
+
+        // Search by IMDB/TMDB ID, or fall back to name search
+        let result;
+        if (imdbId || tmdbId) {
+          const searchId = imdbId || tmdbId;
+          result = await searchSubdlSubtitles(searchId!, {
+            type: isEpisode ? "tv" : "movie",
+            seasonNumber: isEpisode ? (currentItem as any)?.ParentIndexNumber : undefined,
+            episodeNumber: isEpisode ? (currentItem as any)?.IndexNumber : undefined,
+            languages: "EN",
+          });
+        } else {
+          // No provider IDs — search by name
+          const seriesName = (currentItem as any)?.SeriesName || currentItem?.Name;
+          if (seriesName) {
+            result = await searchSubdlSubtitles(seriesName, {
+              type: isEpisode ? "tv" : "movie",
+              seasonNumber: isEpisode ? (currentItem as any)?.ParentIndexNumber : undefined,
+              episodeNumber: isEpisode ? (currentItem as any)?.IndexNumber : undefined,
+              languages: "EN",
+            });
+          }
         }
 
-        const searchId = imdbId || tmdbId;
-        const result = await searchSubdlSubtitles(searchId!, {
-          type: isEpisode ? "tv" : "movie",
-          seasonNumber: isEpisode ? (currentItem as any)?.ParentIndexNumber : undefined,
-          episodeNumber: isEpisode ? (currentItem as any)?.IndexNumber : undefined,
-          languages: "EN",
-        });
-
-        if (!cancelled) setSubdlResults(result.subtitles);
+        if (!cancelled && result) setSubdlResults(result.subtitles);
       } catch {
         // Subdl search failed — not critical, Jellyfin tracks still work
       } finally {

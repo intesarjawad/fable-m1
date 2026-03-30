@@ -267,6 +267,20 @@ export function usePlaybackManager(): PlaybackContextValue {
             }
           }
 
+          // If no subtitle was selected by Jellyfin's mode, default to English
+          if (targetIndex === undefined) {
+            const englishSub = subs.find(
+              (s) => {
+                const lang = (s.language || "").toLowerCase();
+                return (lang === "eng" || lang === "en" || lang === "english") && !s.forced;
+              }
+            );
+            if (englishSub) {
+              targetIndex = englishSub.index;
+              options.subtitleStreamIndex = targetIndex;
+            }
+          }
+
           if (targetIndex !== undefined) {
             options.textTracks = subs.map((t) => ({
               ...t,

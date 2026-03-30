@@ -36,11 +36,13 @@ export async function searchSubdlSubtitles(
     subs_per_page: "15",
   });
 
-  // Detect ID type: IMDB IDs start with "tt", otherwise assume TMDB ID
+  // Detect ID type: IMDB IDs start with "tt", numeric strings are TMDB IDs, else name search
   if (mediaId.startsWith("tt")) {
     params.set("imdb_id", mediaId);
-  } else {
+  } else if (/^\d+$/.test(mediaId)) {
     params.set("tmdb_id", mediaId);
+  } else {
+    params.set("film_name", mediaId);
   }
 
   if (options?.type) params.set("type", options.type);
