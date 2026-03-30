@@ -22,6 +22,7 @@ import { createJellyfinInstance } from "../lib/utils";
 import { JellyfinUserWithToken } from "../types/jellyfin";
 import { v4 as uuidv4 } from "uuid";
 import { StoreAuthData } from "./store/store-auth-data";
+import { StoreServerURL } from "./store/store-server-url";
 import { isAuthError } from "./media";
 
 const HEVC_MEDIA_TYPES = [
@@ -1177,5 +1178,18 @@ export async function fetchCountries(): Promise<CountryInfo[]> {
   } catch (error) {
     console.error("Failed to fetch countries:", error);
     return [];
+  }
+}
+
+export async function getPublicServerInfo(): Promise<{ ServerName: string } | null> {
+  try {
+    const serverUrl = await StoreServerURL.get();
+    if (!serverUrl) return null;
+    const baseUrl = serverUrl.replace(/\/+$/, "");
+    const response = await fetch(`${baseUrl}/System/Info/Public`);
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
   }
 }

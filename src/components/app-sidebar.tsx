@@ -143,6 +143,7 @@ export function AppSidebar() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [serverUrl, setServerUrl] = useState<string | null>(null);
+  const [serverDisplayName, setServerDisplayName] = useState("Fable");
   const [libraries, setLibraries] = useState<BaseItemDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -161,6 +162,13 @@ export function AppSidebar() {
 
         setUser(userData);
         setServerUrl(serverUrlData);
+
+        // Fetch real server name from Jellyfin API
+        const { getPublicServerInfo } = await import("../actions");
+        const publicInfo = await getPublicServerInfo();
+        if (publicInfo?.ServerName) {
+          setServerDisplayName(publicInfo.ServerName);
+        }
 
         // Fetch libraries if we have both user and server URL
         if (userData && serverUrlData) {
@@ -289,7 +297,7 @@ export function AppSidebar() {
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
                   <span className="font-semibold">
-                    {serverUrl ? new URL(serverUrl).hostname.split('.')[0].replace(/^(jellyfin|www)$/, 'Fable') : "Fable"}
+                    {serverDisplayName}
                   </span>
                 </div>
               </Link>

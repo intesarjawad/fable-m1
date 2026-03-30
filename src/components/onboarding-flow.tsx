@@ -8,10 +8,10 @@ import { useAtom } from "jotai";
 import { themeSelectionAtom } from "../lib/atoms";
 import { useRouter } from "next/navigation";
 
-type OnboardingStep = "server" | "login" | "theme";
+type OnboardingStep = "server" | "login" | "theme" | "loading";
 
 export function OnboardingFlow() {
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>("server");
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>("loading");
   const router = useRouter();
   const [selectedTheme] = useAtom(themeSelectionAtom);
 
@@ -72,6 +72,12 @@ export function OnboardingFlow() {
     setCurrentStep("server");
   };
 
+  if (currentStep === "loading") {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-[#050508]" />
+    );
+  }
+
   if (currentStep === "server") {
     return <ServerSetup onNext={handleServerSetup} />;
   }
@@ -91,5 +97,7 @@ export function OnboardingFlow() {
     );
   }
 
-  return <ServerSetup onNext={handleServerSetup} />;
+  return (
+    <div className="flex min-h-screen w-full items-center justify-center bg-[#050508]" />
+  );
 }

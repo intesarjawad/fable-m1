@@ -85,6 +85,7 @@ export {
   fetchCountries,
   createUser,
   deleteUser,
+  getPublicServerInfo,
 } from "./utils";
 export {
   fetchDashboardGeneralData,

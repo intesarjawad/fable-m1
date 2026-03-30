@@ -15,7 +15,6 @@ import {
   initiateQuickConnect,
   getQuickConnectStatus,
   authenticateWithQuickConnect,
-  getServerUrl,
 } from "../actions";
 import {
   Loader2,
@@ -80,17 +79,12 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
       }
     })();
 
-    // Get server name from URL
+    // Fetch actual server name from Jellyfin API
     (async () => {
-      const url = await getServerUrl();
-      if (url && isMountedRef.current) {
-        try {
-          const hostname = new URL(url).hostname;
-          const name = hostname.split(".")[0];
-          if (name && name !== "jellyfin" && name !== "www") {
-            setServerName(name.charAt(0).toUpperCase() + name.slice(1));
-          }
-        } catch {}
+      const { getPublicServerInfo } = await import("../actions");
+      const info = await getPublicServerInfo();
+      if (info?.ServerName && isMountedRef.current) {
+        setServerName(info.ServerName);
       }
     })();
 
@@ -400,10 +394,6 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
           )}
         </div>
 
-        {/* Footer */}
-        <p className="mt-8 text-[11px] text-white/15">
-          Powered by Jellyfin
-        </p>
       </div>
     </div>
   );
