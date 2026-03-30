@@ -61,12 +61,14 @@ import {
   History,
   Signal,
   FastForward,
+  Compass,
 } from "lucide-react";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { useSyncPlay } from "@/src/contexts/syncplay-context";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { NotificationBell } from "./notification-bell";
 
 function SidebarWatchPartyContent() {
   const { isInGroup, currentGroup, availableGroups, joinGroup, joinWithCode, leaveGroup } = useSyncPlay();
@@ -319,6 +321,15 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/discover" onClick={() => setOpenMobile(false)}>
+                    <Compass className="h-4 w-4" />
+                    <span>Discover</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               {/* Libraries Section */}
               <Collapsible
                 asChild
@@ -389,6 +400,10 @@ export function AppSidebar() {
                     </CollapsibleContent>
                   </div>
                 </Collapsible>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <NotificationBell />
               </SidebarMenuItem>
 
               {/* Admin Section */}
