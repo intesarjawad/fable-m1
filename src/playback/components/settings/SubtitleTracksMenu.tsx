@@ -81,6 +81,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
   const [subdlResults, setSubdlResults] = useState<SubdlSubtitle[]>([]);
   const [subdlAvailable, setSubdlAvailable] = useState(false);
   const [subdlLoading, setSubdlLoading] = useState(false);
+  const [subdlSearched, setSubdlSearched] = useState(false);
   const [loadingSubdlIndex, setLoadingSubdlIndex] = useState<number | null>(null);
 
   const [subtitleSize, setSubtitleSize] = useState<number>(() => {
@@ -114,12 +115,13 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     isSubdlConfigured().then(setSubdlAvailable);
   }, []);
 
-  // Auto-search Subdl when menu opens
+  // Auto-search Subdl when menu opens — runs exactly once per item
   useEffect(() => {
-    if (!open || !subdlAvailable || subdlResults.length > 0 || subdlLoading) return;
+    if (!open || !subdlAvailable || subdlSearched || subdlLoading) return;
 
     let cancelled = false;
     setSubdlLoading(true);
+    setSubdlSearched(true);
 
     async function search() {
       try {
@@ -190,11 +192,12 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [open, subdlAvailable, subdlResults.length, subdlLoading, currentItem]);
+  }, [open, subdlAvailable, subdlSearched, subdlLoading, currentItem]);
 
   // Reset state when item changes
   useEffect(() => {
     setSubdlResults([]);
+    setSubdlSearched(false);
   }, [currentItem?.Id]);
 
   // Build merged + sorted subtitle list
