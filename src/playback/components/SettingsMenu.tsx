@@ -4,6 +4,8 @@ import { PlaybackSpeedMenu } from "./settings/PlaybackSpeedMenu";
 import { VideoQualityMenu } from "./settings/VideoQualityMenu";
 import { SubtitleTracksMenu } from "./settings/SubtitleTracksMenu";
 import { AudioTracksMenu } from "./settings/AudioTracksMenu";
+import { useSyncPlay } from "@/src/contexts/syncplay-context";
+import { useSettings } from "@/src/contexts/settings-context";
 
 interface SettingsMenuProps {
   manager: PlaybackContextValue;
@@ -14,6 +16,9 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
   manager,
   isVisible = true,
 }) => {
+  const { isInGroup } = useSyncPlay();
+  const { showQualitySelector } = useSettings();
+
   const [openSpeed, setOpenSpeed] = useState(false);
   const [openQuality, setOpenQuality] = useState(false);
   const [openSubtitles, setOpenSubtitles] = useState(false);
@@ -37,23 +42,27 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({
 
   return (
     <div className="flex gap-4">
-      <PlaybackSpeedMenu
-        manager={manager}
-        open={openSpeed}
-        onOpenChange={(open) => {
-          if (open) closeAllMenus();
-          setOpenSpeed(open);
-        }}
-      />
+      {!isInGroup && (
+        <PlaybackSpeedMenu
+          manager={manager}
+          open={openSpeed}
+          onOpenChange={(open) => {
+            if (open) closeAllMenus();
+            setOpenSpeed(open);
+          }}
+        />
+      )}
 
-      <VideoQualityMenu
-        manager={manager}
-        open={openQuality}
-        onOpenChange={(open) => {
-          if (open) closeAllMenus();
-          setOpenQuality(open);
-        }}
-      />
+      {showQualitySelector && (
+        <VideoQualityMenu
+          manager={manager}
+          open={openQuality}
+          onOpenChange={(open) => {
+            if (open) closeAllMenus();
+            setOpenQuality(open);
+          }}
+        />
+      )}
 
       <SubtitleTracksMenu
         manager={manager}

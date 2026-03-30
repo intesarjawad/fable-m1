@@ -27,6 +27,8 @@ interface SettingsContextType {
   setEnableThemeSongs: (enable: boolean) => void;
   enableAuroraEffect: boolean;
   setEnableAuroraEffect: (enable: boolean) => void;
+  showQualitySelector: boolean;
+  setShowQualitySelector: (show: boolean) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(
@@ -38,6 +40,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [enableThemeBackdrops, setEnableThemeBackdropsState] = useState(true);
   const [enableThemeSongs, setEnableThemeSongsState] = useState(true);
   const [enableAuroraEffect, setEnableAuroraEffectState] = useState(true);
+  const [showQualitySelector, setShowQualitySelectorState] = useState(false);
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -67,6 +70,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     if (savedAuroraEffect !== null) {
       setEnableAuroraEffectState(savedAuroraEffect === "true");
     }
+
+    const savedQualitySelector = localStorage.getItem(
+      "fable-show-quality-selector",
+    );
+    if (savedQualitySelector !== null) {
+      setShowQualitySelectorState(savedQualitySelector === "true");
+    }
   }, []);
 
   // Save to localStorage when states change
@@ -90,6 +100,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("aperture-enable-aurora-effect", String(enable));
   };
 
+  const setShowQualitySelector = (show: boolean) => {
+    setShowQualitySelectorState(show);
+    localStorage.setItem("fable-show-quality-selector", String(show));
+  };
+
   return (
     <SettingsContext.Provider
       value={{
@@ -101,6 +116,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         setEnableThemeSongs,
         enableAuroraEffect,
         setEnableAuroraEffect,
+        showQualitySelector,
+        setShowQualitySelector,
       }}
     >
       {children}

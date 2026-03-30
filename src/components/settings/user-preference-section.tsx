@@ -27,6 +27,8 @@ export default function UserPreferenceSection() {
     setEnableThemeSongs,
     enableAuroraEffect,
     setEnableAuroraEffect,
+    showQualitySelector,
+    setShowQualitySelector,
   } = useSettings();
 
   const preferences = [
@@ -51,6 +53,14 @@ export default function UserPreferenceSection() {
         "Enable aurora effect in the interface (Enabled by default).",
       checked: enableAuroraEffect,
       onCheckedChange: setEnableAuroraEffect,
+    },
+    {
+      id: "show-quality-selector",
+      title: "Show Quality Selector",
+      description:
+        "Show the video quality selector in the player. Enable this if your server supports transcoding.",
+      checked: showQualitySelector,
+      onCheckedChange: setShowQualitySelector,
     },
   ];
 
