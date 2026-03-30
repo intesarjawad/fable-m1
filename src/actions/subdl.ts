@@ -50,14 +50,23 @@ export async function searchSubdlSubtitles(
   if (options?.episodeNumber) params.set("episode_number", String(options.episodeNumber));
   if (options?.languages) params.set("languages", options.languages);
 
+  const requestUrl = `${SUBDL_BASE}?${params}`;
+  console.log("[subdl] Searching:", requestUrl.replace(/api_key=[^&]+/, "api_key=***"));
+
   try {
-    const response = await fetch(`${SUBDL_BASE}?${params}`, {
+    const response = await fetch(requestUrl, {
       signal: AbortSignal.timeout(10000),
     });
 
-    if (!response.ok) return { subtitles: [] };
+    console.log("[subdl] Response status:", response.status);
+
+    if (!response.ok) {
+      console.log("[subdl] Non-OK response");
+      return { subtitles: [] };
+    }
 
     const data = await response.json();
+    console.log("[subdl] Results:", data.status, "subtitles:", data.subtitles?.length ?? 0);
     if (!data.status || !data.subtitles) return { subtitles: [] };
 
     return {

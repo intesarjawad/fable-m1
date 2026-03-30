@@ -123,15 +123,23 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
       let imdbId: string | undefined;
       let tmdbId: string | undefined;
 
+      console.log("[subdl-client] Starting search. Type:", itemType, "Item:", currentItem?.Name);
+      console.log("[subdl-client] ProviderIds:", JSON.stringify((currentItem as any)?.ProviderIds));
+      console.log("[subdl-client] SeriesId:", (currentItem as any)?.SeriesId);
+
       // For episodes, fetch series to get correct IMDB ID
       if (isEpisode) {
         const seriesId = (currentItem as any)?.SeriesId;
         if (seriesId) {
           try {
+            console.log("[subdl-client] Fetching series details for:", seriesId);
             const series = await fetchMediaDetails(seriesId);
+            console.log("[subdl-client] Series ProviderIds:", JSON.stringify(series?.ProviderIds));
             imdbId = series?.ProviderIds?.Imdb ?? undefined;
             tmdbId = series?.ProviderIds?.Tmdb ?? undefined;
-          } catch {}
+          } catch (e) {
+            console.error("[subdl-client] Series fetch failed:", e);
+          }
         }
       }
 
@@ -143,6 +151,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 
       // Build search query — ID or name
       const searchId = imdbId || tmdbId || (currentItem as any)?.SeriesName || currentItem?.Name;
+      console.log("[subdl-client] Search ID:", searchId);
       if (!searchId) return;
 
       const result = await searchSubdlSubtitles(searchId, {
@@ -152,6 +161,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
         languages: "EN",
       });
 
+      console.log("[subdl-client] Got results:", result.subtitles.length);
       setSubdlResults(result.subtitles);
     } catch {
       // Not critical
