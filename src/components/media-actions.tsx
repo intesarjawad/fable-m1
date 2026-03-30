@@ -82,54 +82,57 @@ export function MediaActions({
       const defaultSource = media.MediaSources[0];
       setSelectedVersion(defaultSource);
 
-      // Select default audio stream
+      // Select default audio stream — prefer English
       if (defaultSource.MediaStreams) {
-        let defaultAudio: MediaStream | undefined;
-        getAuthData()
-          .then(({ user }) => {
-            if (user && user.Configuration) {
-              if (
-                !user.Configuration.PlayDefaultAudioTrack &&
-                user.Configuration.AudioLanguagePreference
-              )
-                defaultAudio = defaultSource.MediaStreams!.find(
-                  (s) =>
-                    s.Type === "Audio" &&
-                    s.Language === user.Configuration!.AudioLanguagePreference,
+        const audioStreams = defaultSource.MediaStreams.filter(
+          (s) => s.Type === "Audio",
+        );
+
+        // Try English first, then user preference, then file default, then first available
+        const englishAudio = audioStreams.find((s) => {
+          const lang = (s.Language || "").toLowerCase();
+          return lang === "eng" || lang === "en" || lang === "english";
+        });
+
+        if (englishAudio) {
+          setSelectedAudioStreamIndex(englishAudio.Index);
+        } else {
+          getAuthData()
+            .then(({ user }) => {
+              if (user?.Configuration?.AudioLanguagePreference) {
+                const prefAudio = audioStreams.find(
+                  (s) => s.Language === user.Configuration!.AudioLanguagePreference,
                 );
-              else
-                defaultAudio = defaultSource!.MediaStreams!.find(
-                  (s) => s.Type === "Audio" && s.IsDefault,
-                );
+                if (prefAudio) {
+                  setSelectedAudioStreamIndex(prefAudio.Index);
+                  return;
+                }
+              }
+              const defaultAudio = audioStreams.find((s) => s.IsDefault) || audioStreams[0];
               if (defaultAudio) setSelectedAudioStreamIndex(defaultAudio.Index);
-            }
-          })
-          .finally(() => {
-            if (defaultAudio === undefined) {
-              // Fallback to first audio stream
-              const firstAudio = defaultSource!.MediaStreams!.find(
-                (s) => s.Type === "Audio",
-              );
-              setSelectedAudioStreamIndex(firstAudio?.Index);
-            }
-          });
+            })
+            .catch(() => {
+              const fallback = audioStreams.find((s) => s.IsDefault) || audioStreams[0];
+              if (fallback) setSelectedAudioStreamIndex(fallback.Index);
+            });
+        }
       }
     }
   }, [media]);
 
-  // Update selected audio when version changes
+  // Update selected audio when version changes — prefer English
   useEffect(() => {
     if (selectedVersion?.MediaStreams) {
-      const defaultAudio = selectedVersion.MediaStreams.find(
-        (s) => s.Type === "Audio" && s.IsDefault,
+      const audioStreams = selectedVersion.MediaStreams.filter(
+        (s) => s.Type === "Audio",
       );
-      if (defaultAudio) {
-        setSelectedAudioStreamIndex(defaultAudio.Index);
-      } else {
-        const firstAudio = selectedVersion.MediaStreams.find(
-          (s) => s.Type === "Audio",
-        );
-        setSelectedAudioStreamIndex(firstAudio?.Index);
+      const englishAudio = audioStreams.find((s) => {
+        const lang = (s.Language || "").toLowerCase();
+        return lang === "eng" || lang === "en" || lang === "english";
+      });
+      const picked = englishAudio || audioStreams.find((s) => s.IsDefault) || audioStreams[0];
+      if (picked) {
+        setSelectedAudioStreamIndex(picked.Index);
       }
     }
   }, [selectedVersion]);

@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,7 +81,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
   const [subdlResults, setSubdlResults] = useState<SubdlSubtitle[]>([]);
   const [subdlAvailable, setSubdlAvailable] = useState(false);
   const [subdlLoading, setSubdlLoading] = useState(false);
-  const [subdlSearched, setSubdlSearched] = useState(false);
+  const subdlSearchedForItemRef = useRef<string | null>(null); // tracks which item ID was searched
   const [loadingSubdlIndex, setLoadingSubdlIndex] = useState<number | null>(null);
 
   const [subtitleSize, setSubtitleSize] = useState<number>(() => {
@@ -117,11 +117,13 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 
   // Auto-search Subdl when menu opens — runs exactly once per item
   useEffect(() => {
-    if (!open || !subdlAvailable || subdlSearched || subdlLoading) return;
+    const currentItemId = currentItem?.Id || null;
+    if (!open || !subdlAvailable || subdlLoading) return;
+    if (subdlSearchedForItemRef.current === currentItemId) return; // already searched this item
 
     let cancelled = false;
     setSubdlLoading(true);
-    setSubdlSearched(true);
+    subdlSearchedForItemRef.current = currentItemId;
 
     async function search() {
       try {
@@ -192,12 +194,11 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [open, subdlAvailable, subdlSearched, subdlLoading, currentItem]);
+  }, [open, subdlAvailable, subdlLoading, currentItem?.Id]);
 
-  // Reset state when item changes
+  // Reset results when item changes (ref resets via the ID comparison above)
   useEffect(() => {
     setSubdlResults([]);
-    setSubdlSearched(false);
   }, [currentItem?.Id]);
 
   // Build merged + sorted subtitle list
