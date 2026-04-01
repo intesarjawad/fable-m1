@@ -28,27 +28,43 @@ function convertSubtitleToVTT(content: string): string {
 
   let vtt = "WEBVTT\n\n";
 
-  const blocks = content.split(/\n\s*\n/);
+  // Line-by-line parsing — more robust than block splitting.
+  // SRT files from different sources have inconsistent blank line spacing.
+  const lines = content.split("\n");
+  let i = 0;
 
-  for (const block of blocks) {
-    if (!block.trim()) continue;
+  while (i < lines.length) {
+    const line = lines[i].trim();
 
-    const lines = block.trim().split("\n");
-    if (lines.length < 2) continue;
+    // Look for a timestamp line anywhere
+    if (line.includes("-->")) {
+      const vttTimeline = line.replace(/,/g, ".");
 
-    let startIdx = 0;
-    if (/^\d+$/.test(lines[0])) {
-      startIdx = 1;
-    }
+      // Collect text lines until blank line or next sequence number
+      const textLines: string[] = [];
+      i++;
+      while (i < lines.length) {
+        const textLine = lines[i];
+        const trimmed = textLine.trim();
+        // Stop at blank lines or lines that look like sequence numbers
+        // (a sequence number is a standalone integer followed by a blank or timestamp)
+        if (trimmed === "") {
+          i++;
+          break;
+        }
+        // Check if this line is a sequence number (all digits) and next line has -->
+        if (/^\d+$/.test(trimmed) && i + 1 < lines.length && lines[i + 1].includes("-->")) {
+          break;
+        }
+        textLines.push(textLine);
+        i++;
+      }
 
-    const timeline = lines[startIdx];
-    if (!timeline || !timeline.includes("-->")) continue;
-
-    const vttTimeline = timeline.replace(/,/g, ".");
-    const subtitleText = lines.slice(startIdx + 1).join("\n");
-
-    if (subtitleText.trim()) {
-      vtt += `${vttTimeline}\n${subtitleText}\n\n`;
+      if (textLines.length > 0) {
+        vtt += `${vttTimeline}\n${textLines.join("\n")}\n\n`;
+      }
+    } else {
+      i++;
     }
   }
 
