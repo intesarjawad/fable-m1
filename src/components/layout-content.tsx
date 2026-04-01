@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { SidebarInset, SidebarProvider } from "../components/ui/sidebar";
 import { AppSidebar } from "../components/app-sidebar";
+import { MobileDock } from "../components/mobile-dock";
 
 interface LayoutContentProps {
   children: React.ReactNode;
@@ -123,14 +124,17 @@ export function LayoutContent({ children }: LayoutContentProps) {
       >
         <AppSidebar />
         <SidebarInset
-          className={`flex-1 overflow-hidden transition-all duration-300 ease-in-out md:pl-[calc(var(--sidebar-width-icon)+0.5rem)]`}
+          className={`flex-1 overflow-hidden transition-all duration-300 ease-in-out md:pl-[var(--sidebar-width-icon)]`}
         >
           {/* relative container so the absolute search bar positions correctly */}
           <div className="relative flex-1 overflow-y-auto no-scrollbar">
             <GlobalSearchBar />
             {children}
+            {/* Spacer so content isn't hidden behind the mobile dock */}
+            <div className="h-20 md:hidden" />
           </div>
         </SidebarInset>
+        <MobileDock />
       </SidebarProvider>
     </div>
   );
