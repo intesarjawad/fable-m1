@@ -294,7 +294,7 @@ export default function HomePage() {
   function jellyfinPosterUrl(item: ResumeItem): string | null {
     const imageId = item.SeriesId || item.Id;
     if (!item.ImageTags?.Primary && !item.SeriesId) return null;
-    return `/api/jellyfin/image/${imageId}/Primary?maxHeight=400`;
+    return `/api/jellyfin/image/${imageId}/Images/Primary?maxHeight=400`;
   }
 
   // ------------------------------------------------------------------
