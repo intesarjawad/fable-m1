@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Fragment } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { Play, X, Download, Loader2, RotateCcw, ListRestart } from "lucide-react";
+import { Play, X, Download, Loader2, RotateCcw, ListRestart, Heart } from "lucide-react";
 import { toast } from "sonner";
 
 import { tmdbPosterUrl, tmdbBackdropUrl } from "@/src/lib/tmdb";
@@ -11,6 +11,7 @@ import { useJellyfinTmdbMap } from "@/src/hooks/use-jellyfin-tmdb-map";
 import { useIsMobile } from "@/src/hooks/use-mobile";
 import { requestMovie, requestTvShow } from "@/src/actions/request";
 import { findJellyfinEpisodeId } from "@/src/actions/media";
+import { markFavorite, unmarkFavorite } from "@/src/actions";
 import { usePlayback } from "@/src/hooks/usePlayback";
 
 import { Button } from "@/src/components/ui/button";
@@ -396,6 +397,8 @@ export default function MediaDetailPage() {
   const [requestingTvShow, setRequestingTvShow] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [togglingFavorite, setTogglingFavorite] = useState(false);
 
   // Episode sheet state
   const [selectedEpisode, setSelectedEpisode] = useState<TmdbEpisode | null>(null);
@@ -538,6 +541,40 @@ export default function MediaDetailPage() {
     return () => controller.abort();
   }, [resolvedTmdbId, mediaType]);
 
+  // ─── Watchlist (Jellyfin favorite) ───────────────────────────────────────
+
+  // Declared here (rather than in the computed values block below) so the
+  // Watchlist effect and callback can reference it without a forward-reference error.
+  const jellyfinEntry = resolvedTmdbId ? tmdbMap.get(resolvedTmdbId) : undefined;
+
+  // jellyfinEntry loads asynchronously (tmdbMap populates after mount),
+  // so we sync isFavorite whenever it becomes available. The map currently
+  // doesn't carry UserData, so we default to false until the user toggles.
+  useEffect(() => {
+    setIsFavorite(false);
+  }, [jellyfinEntry]);
+
+  const handleToggleFavorite = useCallback(async () => {
+    if (!jellyfinEntry) return;
+    setTogglingFavorite(true);
+    const jellyfinItemId = jellyfinEntry.jellyfinId;
+    try {
+      const succeeded = isFavorite
+        ? await unmarkFavorite(jellyfinItemId)
+        : await markFavorite(jellyfinItemId);
+      if (succeeded) {
+        setIsFavorite((prev) => !prev);
+        toast.success(isFavorite ? `Removed from Watchlist` : `Added to Watchlist`);
+      } else {
+        toast.error("Failed to update Watchlist");
+      }
+    } catch {
+      toast.error("Failed to update Watchlist");
+    } finally {
+      setTogglingFavorite(false);
+    }
+  }, [jellyfinEntry, isFavorite]);
+
   // ─── Season episode loading ───────────────────────────────────────────────
 
   useEffect(() => {
@@ -635,10 +672,6 @@ export default function MediaDetailPage() {
     [];
   const similarItems =
     movieDetails?.similar.results ?? tvDetails?.similar.results ?? [];
-
-  const jellyfinEntry = resolvedTmdbId
-    ? tmdbMap.get(resolvedTmdbId)
-    : undefined;
 
   // ─── Derived Riven state for current season/episode ────────────────────────
 
@@ -954,6 +987,30 @@ export default function MediaDetailPage() {
                   >
                     <Play className="mr-1.5 h-4 w-4 fill-current" />
                     Play
+                  </Button>
+                )}
+
+                {/* Watchlist -- personal bookmark, shown whenever Jellyfin knows the item */}
+                {jellyfinEntry && (
+                  <Button
+                    variant="secondary"
+                    size="default"
+                    disabled={togglingFavorite}
+                    onClick={handleToggleFavorite}
+                    className={
+                      isFavorite
+                        ? "border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary border bg-transparent px-4"
+                        : "border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
+                    }
+                  >
+                    {togglingFavorite ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Heart
+                        className={`mr-1.5 h-4 w-4 ${isFavorite ? "fill-current" : ""}`}
+                      />
+                    )}
+                    {isFavorite ? "In Watchlist" : "Watchlist"}
                   </Button>
                 )}
 

@@ -128,6 +128,33 @@ export async function fetchDiscoverTv(
   return tmdbFetch<TmdbPaginatedResponse<TmdbTvShow>>("/discover/tv", params);
 }
 
+export async function fetchNowPlayingMovies(): Promise<TmdbMovie[]> {
+  const data = await tmdbFetch<TmdbPaginatedResponse<TmdbMovie>>("/movie/now_playing");
+  return data?.results ?? [];
+}
+
+export async function fetchOnTheAirTv(): Promise<TmdbTvShow[]> {
+  const data = await tmdbFetch<TmdbPaginatedResponse<TmdbTvShow>>("/tv/on_the_air");
+  return data?.results ?? [];
+}
+
+export async function fetchDiscoverByProvider(
+  providerId: number,
+  mediaType: "movie" | "tv" = "movie"
+): Promise<(TmdbMovie | TmdbTvShow)[]> {
+  const params: Record<string, string> = {
+    sort_by: "popularity.desc",
+    watch_region: "US",
+    with_watch_providers: String(providerId),
+  };
+  if (mediaType === "movie") {
+    const data = await tmdbFetch<TmdbPaginatedResponse<TmdbMovie>>("/discover/movie", params);
+    return data?.results ?? [];
+  }
+  const data = await tmdbFetch<TmdbPaginatedResponse<TmdbTvShow>>("/discover/tv", params);
+  return data?.results ?? [];
+}
+
 export async function fetchTvExternalIds(tmdbId: number): Promise<TmdbExternalIds | null> {
   return tmdbFetch<TmdbExternalIds>(`/tv/${tmdbId}/external_ids`);
 }

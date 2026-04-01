@@ -1004,6 +1004,83 @@ export async function unmarkFavorite(itemId: string): Promise<boolean> {
   }
 }
 
+export interface FavoriteItem {
+  id: string;
+  title: string;
+  poster_path: string;
+  media_type: "movie" | "tv";
+  year: number | null;
+  jellyfin_id: string;
+}
+
+export async function fetchFavoriteItems(): Promise<FavoriteItem[]> {
+  try {
+    const { serverUrl, user } = await getAuthData();
+    if (!user.AccessToken) throw new Error("No access token found");
+
+    const params = new URLSearchParams({
+      Filters: "IsFavorite",
+      Recursive: "true",
+      Fields: "PrimaryImageAspectRatio,Overview,ProviderIds",
+      EnableImages: "true",
+      Limit: "20",
+      SortBy: "DateCreated",
+      SortOrder: "Descending",
+    });
+
+    const response = await fetch(
+      `${serverUrl}/Users/${user.Id}/Items?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `MediaBrowser Token="${user.AccessToken}"`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        const authError = new Error(
+          "Authentication expired. Please sign in again.",
+        );
+        (authError as any).isAuthError = true;
+        throw authError;
+      }
+      throw new Error(`Jellyfin returned ${response.status}`);
+    }
+
+    const jellyfinData = await response.json();
+    const rawItems = jellyfinData.Items ?? [];
+
+    return rawItems.map(
+      (item: {
+        Id: string;
+        Name: string;
+        Type: string;
+        ProductionYear?: number;
+        ProviderIds?: { Tmdb?: string };
+      }): FavoriteItem => ({
+        id: item.ProviderIds?.Tmdb ?? item.Id,
+        title: item.Name,
+        poster_path: `${serverUrl}/Items/${item.Id}/Images/Primary?maxHeight=400`,
+        media_type: item.Type === "Movie" ? "movie" : "tv",
+        year: item.ProductionYear ?? null,
+        jellyfin_id: item.Id,
+      }),
+    );
+  } catch (error) {
+    console.error("Failed to fetch favorite items:", error);
+    if (isAuthError(error)) {
+      const authError = new Error(
+        "Authentication expired. Please sign in again.",
+      );
+      (authError as any).isAuthError = true;
+      throw authError;
+    }
+    return [];
+  }
+}
+
 export async function fetchVirtualFolders(): Promise<VirtualFolderInfo[]> {
   try {
     const { serverUrl, user } = await getAuthData();
