@@ -11,6 +11,7 @@ import { useJellyfinTmdbMap } from "@/src/hooks/use-jellyfin-tmdb-map";
 import { useIsMobile } from "@/src/hooks/use-mobile";
 import { requestMovie, requestTvShow } from "@/src/actions/request";
 import { findJellyfinEpisodeId } from "@/src/actions/media";
+import { usePlayback } from "@/src/hooks/usePlayback";
 
 import { Button } from "@/src/components/ui/button";
 import { Badge } from "@/src/components/ui/badge";
@@ -367,6 +368,7 @@ export default function MediaDetailPage() {
   const mediaType = params.type as "movie" | "tv";
 
   const { tmdbMap } = useJellyfinTmdbMap();
+  const { play } = usePlayback();
 
   // For TVDB-indexed URLs, the raw ID is a TVDB ID.
   // rivenLookupId is always the raw ID (Riven indexes TV shows by TVDB ID).
@@ -653,8 +655,12 @@ export default function MediaDetailPage() {
 
   const handlePlay = useCallback(() => {
     if (!jellyfinEntry) return;
-    router.push(`/player/${jellyfinEntry.jellyfinId}`);
-  }, [jellyfinEntry, router]);
+    play({
+      id: jellyfinEntry.jellyfinId,
+      name: title,
+      type: mediaType === "movie" ? "Movie" : "Series",
+    });
+  }, [jellyfinEntry, play, title, mediaType]);
 
   const handleMovieRequest = useCallback(async () => {
     if (!resolvedTmdbId) return;
@@ -718,25 +724,25 @@ export default function MediaDetailPage() {
   );
 
   const handleEpisodePlay = useCallback(async () => {
-    if (episodeJellyfinId) {
-      router.push(`/player/${episodeJellyfinId}`);
-      return;
-    }
-    if (jellyfinEntry && selectedEpisode) {
+    let targetId = episodeJellyfinId;
+    if (!targetId && jellyfinEntry && selectedEpisode) {
       try {
-        const resolvedId = await findJellyfinEpisodeId(
+        targetId = await findJellyfinEpisodeId(
           jellyfinEntry.jellyfinId,
           selectedEpisode.season_number,
           selectedEpisode.episode_number,
-        );
-        if (resolvedId) {
-          router.push(`/player/${resolvedId}`);
-          return;
-        }
+        ) ?? null;
       } catch { /* fall through */ }
     }
-    toast.error("Unable to find playback source");
-  }, [episodeJellyfinId, jellyfinEntry, selectedEpisode, router]);
+    if (!targetId) {
+      toast.error("Unable to find playback source");
+      return;
+    }
+    const episodeName = selectedEpisode
+      ? `S${String(selectedEpisode.season_number).padStart(2, "0")}E${String(selectedEpisode.episode_number).padStart(2, "0")} ${selectedEpisode.name}`
+      : "Episode";
+    play({ id: targetId, name: episodeName, type: "Episode" });
+  }, [episodeJellyfinId, jellyfinEntry, selectedEpisode, play]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
