@@ -1,18 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#1a1520"/>
-      <stop offset="100%" stop-color="#0f0d12"/>
-    </linearGradient>
-    <linearGradient id="accent" x1="128" y1="96" x2="384" y2="416" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#e8943a"/>
-      <stop offset="100%" stop-color="#c47020"/>
-    </linearGradient>
-  </defs>
-  <!-- Rounded square background -->
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <!-- Stylized F letterform — bold, cinematic -->
-  <path d="M160 112 h208 q16 0 16 16 v32 q0 16 -16 16 H224 v80 h120 q16 0 16 16 v32 q0 16 -16 16 H224 v136 q0 16 -16 16 h-32 q-16 0 -16 -16 V128 q0 -16 16 -16z" fill="url(#accent)"/>
-  <!-- Subtle inner glow line on the F's top bar -->
-  <path d="M168 120 h196" stroke="#f5c882" stroke-width="2" opacity="0.4" stroke-linecap="round"/>
+  <!-- Dark background -->
+  <rect width="512" height="512" rx="112" fill="#13111a"/>
+  <!-- Lowercase f — geometric, flat, single color -->
+  <!-- Vertical stem -->
+  <rect x="192" y="144" width="48" height="280" rx="4" fill="#d4883a"/>
+  <!-- Crossbar -->
+  <rect x="160" y="240" width="176" height="44" rx="4" fill="#d4883a"/>
+  <!-- Top hook — quarter circle flowing right from stem top -->
+  <path d="M216 144 V132 C216 90 250 64 296 64 L320 64 C328 64 332 68 332 76 L332 96 C332 104 328 108 320 108 L296 108 C274 108 264 120 264 144 L264 144 L216 144Z" fill="#d4883a"/>
 </svg>
