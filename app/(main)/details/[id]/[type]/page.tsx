@@ -790,9 +790,13 @@ export default function MediaDetailPage() {
 
   // Trust Riven as the source of truth for item state
   const isInRiven = rivenItem !== null;
-  const isCompleted = rivenItem?.state === "Completed" || rivenItem?.state === "PartiallyCompleted";
+  const isCompleted = rivenItem?.state === "Completed";
+  const isPartiallyCompleted = rivenItem?.state === "PartiallyCompleted";
+  const ONGOING_STATES = new Set(["Requested", "Indexed", "Scraped", "Downloaded", "Symlinked", "Downloading"]);
+  const isOngoing = rivenItem !== null && ONGOING_STATES.has(rivenItem.state);
+  const canRetry = isInRiven && !isCompleted && !isOngoing;
   // Jellyfin entry used only for getting the player URL
-  const canPlay = isCompleted || jellyfinEntry !== undefined;
+  const canPlay = isCompleted || isPartiallyCompleted || jellyfinEntry !== undefined;
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden">
@@ -967,8 +971,8 @@ export default function MediaDetailPage() {
                   </>
                 )}
 
-                {/* Retry -- when in Riven but not fully completed */}
-                {isInRiven && !isCompleted && (
+                {/* Retry -- stuck or incomplete items (not actively processing) */}
+                {canRetry && (
                   <Button
                     variant="secondary"
                     size="default"
