@@ -6,11 +6,13 @@ import { MediaLink } from "@/src/components/media/media-link";
 import { tmdbPosterUrl } from "@/src/lib/tmdb";
 import type { TmdbMovie, TmdbTvShow } from "@/src/types/tmdb";
 import { isTmdbMovie, getTmdbYear } from "@/src/types/tmdb";
+import Link from "next/link";
 
 interface LazyRowProps {
   title: string;
   cacheKey: string;
   fetchData: () => Promise<(TmdbMovie | TmdbTvShow)[]>;
+  viewAllHref?: string;
   rightContent?: ReactNode;
 }
 
@@ -24,6 +26,9 @@ function SectionHeading({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+const VIEW_ALL_BUTTON_CLASS =
+  "text-muted-foreground border-white/10 bg-black/20 hover:bg-black/40 hover:text-foreground h-9 px-4 rounded-xl border text-xs font-bold backdrop-blur-md shadow-inner transition-all";
 
 // sessionStorage cache helpers
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -46,7 +51,7 @@ function writeToCache<T>(key: string, data: T): void {
   } catch {}
 }
 
-export function LazyRow({ title, cacheKey, fetchData, rightContent }: LazyRowProps) {
+export function LazyRow({ title, cacheKey, fetchData, viewAllHref, rightContent }: LazyRowProps) {
   const [items, setItems] = useState<(TmdbMovie | TmdbTvShow)[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -98,7 +103,14 @@ export function LazyRow({ title, cacheKey, fetchData, rightContent }: LazyRowPro
     <section ref={sentinelRef} className="flex flex-col gap-4">
       <div className="mb-1 flex items-center justify-between">
         <SectionHeading>{title}</SectionHeading>
-        {rightContent}
+        <div className="flex items-center gap-3">
+          {rightContent}
+          {viewAllHref && (
+            <Link href={viewAllHref}>
+              <button className={VIEW_ALL_BUTTON_CLASS}>View All</button>
+            </Link>
+          )}
+        </div>
       </div>
       <MediaCarousel>
         {!loaded

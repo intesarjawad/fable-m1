@@ -425,6 +425,7 @@ export default function HomePage() {
             title="New Arrivals"
             cacheKey="home:now-playing"
             fetchData={fetchNowPlayingMovies}
+            viewAllHref="/lists/discover/new-arrivals"
           />
 
           {/* ── Fresh Series (On The Air) ── */}
@@ -432,6 +433,7 @@ export default function HomePage() {
             title="Fresh Series"
             cacheKey="home:on-the-air"
             fetchData={fetchOnTheAirTv}
+            viewAllHref="/lists/discover/fresh-series"
           />
 
           {/* ── Trending Movies ── */}
@@ -541,6 +543,7 @@ export default function HomePage() {
             title="Hall of Fame"
             cacheKey="home:top-rated"
             fetchData={fetchTopRatedMovies}
+            viewAllHref="/lists/discover/hall-of-fame"
           />
 
           {/* ── Editor's Picks (Popular) ── */}
@@ -548,6 +551,7 @@ export default function HomePage() {
             title="Editor's Picks"
             cacheKey="home:popular-movies"
             fetchData={fetchPopularMovies}
+            viewAllHref="/lists/discover/editors-picks"
           />
 
           {/* ── Platform Rows ── */}
@@ -555,26 +559,31 @@ export default function HomePage() {
             title="Netflix"
             cacheKey="home:netflix"
             fetchData={useCallback(() => fetchDiscoverByProvider(PROVIDER_NETFLIX, "movie"), [])}
+            viewAllHref="/lists/discover/netflix"
           />
           <LazyRow
             title="Prime Video"
             cacheKey="home:prime"
             fetchData={useCallback(() => fetchDiscoverByProvider(PROVIDER_PRIME, "movie"), [])}
+            viewAllHref="/lists/discover/prime"
           />
           <LazyRow
             title="Disney+"
             cacheKey="home:disney"
             fetchData={useCallback(() => fetchDiscoverByProvider(PROVIDER_DISNEY, "movie"), [])}
+            viewAllHref="/lists/discover/disney"
           />
           <LazyRow
             title="HBO"
             cacheKey="home:hbo"
             fetchData={useCallback(() => fetchDiscoverByProvider(PROVIDER_HBO, "movie"), [])}
+            viewAllHref="/lists/discover/hbo"
           />
           <LazyRow
             title="Hulu"
             cacheKey="home:hulu"
             fetchData={useCallback(() => fetchDiscoverByProvider(PROVIDER_HULU, "movie"), [])}
+            viewAllHref="/lists/discover/hulu"
           />
 
           {/* ── Genre Rows ── */}
@@ -585,6 +594,7 @@ export default function HomePage() {
               const data = await fetchDiscoverMovies(GENRE_ACTION);
               return (data?.results ?? []) as TmdbMovie[];
             }, [])}
+            viewAllHref="/lists/discover/action"
           />
           <LazyRow
             title="Edge of Your Seat"
@@ -593,6 +603,7 @@ export default function HomePage() {
               const data = await fetchDiscoverMovies(GENRE_THRILLER);
               return (data?.results ?? []) as TmdbMovie[];
             }, [])}
+            viewAllHref="/lists/discover/thriller"
           />
           <LazyRow
             title="Comedy Club"
@@ -601,6 +612,7 @@ export default function HomePage() {
               const data = await fetchDiscoverMovies(GENRE_COMEDY);
               return (data?.results ?? []) as TmdbMovie[];
             }, [])}
+            viewAllHref="/lists/discover/comedy"
           />
           <LazyRow
             title="The Stage"
@@ -609,6 +621,7 @@ export default function HomePage() {
               const data = await fetchDiscoverMovies(GENRE_DRAMA);
               return (data?.results ?? []) as TmdbMovie[];
             }, [])}
+            viewAllHref="/lists/discover/drama"
           />
           <LazyRow
             title="After Dark"
@@ -617,6 +630,7 @@ export default function HomePage() {
               const data = await fetchDiscoverMovies(GENRE_HORROR);
               return (data?.results ?? []) as TmdbMovie[];
             }, [])}
+            viewAllHref="/lists/discover/horror"
           />
           <LazyRow
             title="Beyond the Stars"
@@ -625,6 +639,7 @@ export default function HomePage() {
               const data = await fetchDiscoverMovies(GENRE_SCIFI);
               return (data?.results ?? []) as TmdbMovie[];
             }, [])}
+            viewAllHref="/lists/discover/scifi"
           />
           <LazyRow
             title="Battlegrounds"
@@ -633,6 +648,7 @@ export default function HomePage() {
               const data = await fetchDiscoverMovies(GENRE_WAR);
               return (data?.results ?? []) as TmdbMovie[];
             }, [])}
+            viewAllHref="/lists/discover/war"
           />
           <LazyRow
             title="Criminal Minds"
@@ -641,6 +657,7 @@ export default function HomePage() {
               const data = await fetchDiscoverTv(GENRE_CRIME_TV);
               return (data?.results ?? []) as TmdbTvShow[];
             }, [])}
+            viewAllHref="/lists/discover/crime-tv"
           />
         </div>
       </div>
