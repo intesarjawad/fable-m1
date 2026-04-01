@@ -8,7 +8,9 @@ import { toast } from "sonner";
 
 import { tmdbPosterUrl, tmdbBackdropUrl } from "@/src/lib/tmdb";
 import { useJellyfinTmdbMap } from "@/src/hooks/use-jellyfin-tmdb-map";
-import { requestMovie } from "@/src/actions/request";
+import { useIsMobile } from "@/src/hooks/use-mobile";
+import { requestMovie, requestTvShow } from "@/src/actions/request";
+import { findJellyfinEpisodeId } from "@/src/actions/media";
 
 import { Button } from "@/src/components/ui/button";
 import { Badge } from "@/src/components/ui/badge";
@@ -24,7 +26,6 @@ import { PortraitCard, PortraitCardSkeleton } from "@/src/components/media/portr
 import { StatusBadge } from "@/src/components/media/status-badge";
 import { EpisodeCard } from "@/src/components/media/episode-card";
 import { MediaLink } from "@/src/components/media/media-link";
-import { RequestSheet } from "@/src/components/request-sheet";
 
 import {
   fetchMovieDetails,
@@ -47,8 +48,6 @@ import {
   type RivenEpisode,
 } from "@/src/types/details";
 
-import type { TmdbTvShow } from "@/src/types/tmdb";
-
 // ─── Rating types ────────────────────────────────────────────────────────────
 
 interface RatingScore {
@@ -68,7 +67,9 @@ function SectionHeading({ title }: { title: string }) {
   return (
     <div className="mb-4 flex items-center gap-3">
       <div className="bg-primary h-6 w-1 rounded-full shadow-[0_0_10px_rgba(var(--primary),0.5)]" />
-      <h2 className="text-foreground text-xl font-bold tracking-tight drop-shadow-md">{title}</h2>
+      <h2 className="text-foreground text-xl font-bold tracking-tight drop-shadow-md">
+        {title}
+      </h2>
     </div>
   );
 }
@@ -83,7 +84,13 @@ interface CarouselItem {
   year?: string | null;
 }
 
-function MediaCarousel({ items, title }: { items: CarouselItem[]; title: string }) {
+function MediaCarousel({
+  items,
+  title,
+}: {
+  items: CarouselItem[];
+  title: string;
+}) {
   if (!items.length) return null;
 
   return (
@@ -99,7 +106,7 @@ function MediaCarousel({ items, title }: { items: CarouselItem[]; title: string 
           >
             <PortraitCard
               title={item.title}
-              subtitle={`${item.mediaType === "tv" ? "TV" : "Movie"}${item.year ? ` • ${item.year}` : ""}`}
+              subtitle={`${item.mediaType === "tv" ? "TV" : "Movie"}${item.year ? ` \u2022 ${item.year}` : ""}`}
               posterUrl={tmdbPosterUrl(item.posterPath, "medium")}
               className="w-36 md:w-44 lg:w-48"
             />
@@ -118,6 +125,7 @@ interface EpisodeSheetProps {
   showTitle: string;
   isOpen: boolean;
   onClose: () => void;
+  isMobile: boolean;
 }
 
 function formatFileSizeGb(bytes: number): string {
@@ -130,7 +138,14 @@ function formatAudioChannels(channelCount: number): string {
   return `${channelCount}ch`;
 }
 
-function EpisodeDetailSheet({ episode, rivenEpisode, showTitle, isOpen, onClose }: EpisodeSheetProps) {
+function EpisodeDetailSheet({
+  episode,
+  rivenEpisode,
+  showTitle,
+  isOpen,
+  onClose,
+  isMobile,
+}: EpisodeSheetProps) {
   if (!episode) return null;
 
   const videoMeta = rivenEpisode?.media_metadata?.video;
@@ -140,19 +155,25 @@ function EpisodeDetailSheet({ episode, rivenEpisode, showTitle, isOpen, onClose 
     ? `https://image.tmdb.org/t/p/w780${episode.still_path}`
     : null;
 
+  const sheetSide = isMobile ? "bottom" : "right";
+  const sheetClassName = isMobile
+    ? "max-h-[85vh] overflow-y-auto border-t border-white/10 bg-zinc-950/95 backdrop-blur-2xl"
+    : "flex w-full flex-col overflow-hidden border-l border-white/10 bg-zinc-950/95 backdrop-blur-2xl sm:max-w-xl md:max-w-2xl lg:max-w-3xl";
+
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
-        side="right"
-        className="flex w-full flex-col overflow-hidden border-l border-white/10 bg-zinc-950/95 backdrop-blur-2xl sm:max-w-xl md:max-w-2xl lg:max-w-3xl"
-      >
+      <SheetContent side={sheetSide} className={sheetClassName}>
         <SheetHeader className="px-6 pt-6 shrink-0">
           <SheetTitle className="text-2xl font-bold tracking-tight">
-            S{episode.season_number}E{episode.episode_number} — {episode.name}
+            S{String(episode.season_number).padStart(2, "0")}E
+            {String(episode.episode_number).padStart(2, "0")} &mdash;{" "}
+            {episode.name}
           </SheetTitle>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-muted-foreground font-serif text-sm">{showTitle}</span>
-            <span className="text-muted-foreground">•</span>
+            <span className="text-muted-foreground font-serif text-sm">
+              {showTitle}
+            </span>
+            <span className="text-muted-foreground">&bull;</span>
             {episode.air_date && (
               <Badge variant="outline" className="font-mono text-xs">
                 {episode.air_date}
@@ -171,7 +192,9 @@ function EpisodeDetailSheet({ episode, rivenEpisode, showTitle, isOpen, onClose 
 
         <div className="mt-6 flex flex-1 flex-col gap-8 overflow-y-auto px-6 pb-12">
           {episode.overview && (
-            <p className="text-muted-foreground text-base leading-relaxed">{episode.overview}</p>
+            <p className="text-muted-foreground text-base leading-relaxed">
+              {episode.overview}
+            </p>
           )}
 
           {stillUrl && (
@@ -208,11 +231,13 @@ function EpisodeDetailSheet({ episode, rivenEpisode, showTitle, isOpen, onClose 
                       Video
                     </span>
                     <div className="flex flex-wrap gap-2">
-                      {videoMeta.resolution_width && videoMeta.resolution_height && (
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {videoMeta.resolution_width}×{videoMeta.resolution_height}
-                        </Badge>
-                      )}
+                      {videoMeta.resolution_width &&
+                        videoMeta.resolution_height && (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {videoMeta.resolution_width}&times;
+                            {videoMeta.resolution_height}
+                          </Badge>
+                        )}
                       {videoMeta.codec && (
                         <Badge variant="outline" className="font-mono text-xs">
                           {videoMeta.codec}
@@ -233,11 +258,19 @@ function EpisodeDetailSheet({ episode, rivenEpisode, showTitle, isOpen, onClose 
                       Audio
                     </span>
                     <div className="flex flex-wrap gap-2">
-                      {audioTracks.map((track, index) => (
-                        <Badge key={index} variant="outline" className="font-mono text-xs">
+                      {audioTracks.map((track, trackIndex) => (
+                        <Badge
+                          key={trackIndex}
+                          variant="outline"
+                          className="font-mono text-xs"
+                        >
                           {track.codec}
-                          {track.channels ? ` ${formatAudioChannels(track.channels)}` : ""}
-                          {track.language ? ` (${track.language.toUpperCase()})` : ""}
+                          {track.channels
+                            ? ` ${formatAudioChannels(track.channels)}`
+                            : ""}
+                          {track.language
+                            ? ` (${track.language.toUpperCase()})`
+                            : ""}
                         </Badge>
                       ))}
                     </div>
@@ -286,12 +319,10 @@ function EpisodeDetailSheet({ episode, rivenEpisode, showTitle, isOpen, onClose 
 function DetailPageSkeleton() {
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden">
-      {/* Hero skeleton */}
       <div className="px-2 md:px-4">
         <Skeleton className="h-[40vh] max-h-[600px] min-h-[350px] w-full rounded-3xl" />
       </div>
-      {/* Content skeleton */}
-      <div className="px-8 pb-24 md:px-20 lg:px-24 mt-6">
+      <div className="mt-6 px-8 pb-24 md:px-20 lg:px-24">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[auto_1fr]">
           <PortraitCardSkeleton className="hidden w-48 lg:block lg:w-64" />
           <div className="flex flex-col gap-4">
@@ -317,19 +348,21 @@ export default function MediaDetailPage() {
   const params = useParams<{ id: string; type: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isMobile = useIsMobile();
 
-  // params.id may be a TVDB ID when coming from the library page
   const rawId = Number(params.id);
   const indexer = searchParams.get("indexer");
   const mediaType = params.type as "movie" | "tv";
 
   const { tmdbMap } = useJellyfinTmdbMap();
 
-  // resolvedTmdbId is null while TVDB resolution is in progress, then set to
-  // the real TMDB ID (which equals rawId when no TVDB resolution is needed).
+  // For TVDB-indexed URLs, the raw ID is a TVDB ID.
+  // rivenLookupId is always the raw ID (Riven indexes TV shows by TVDB ID).
+  // resolvedTmdbId starts null for TVDB lookups, gets resolved async.
   const [resolvedTmdbId, setResolvedTmdbId] = useState<number | null>(
-    indexer === "tvdb" ? null : rawId
+    indexer === "tvdb" ? null : rawId,
   );
+  const rivenLookupId = rawId;
 
   // Core data
   const [movieDetails, setMovieDetails] = useState<TmdbMovieDetails | null>(null);
@@ -346,7 +379,7 @@ export default function MediaDetailPage() {
   // UI state
   const [showTrailer, setShowTrailer] = useState(false);
   const [requestingMovie, setRequestingMovie] = useState(false);
-  const [showRequestSheet, setShowRequestSheet] = useState(false);
+  const [requestingTvShow, setRequestingTvShow] = useState(false);
 
   // Episode sheet state
   const [selectedEpisode, setSelectedEpisode] = useState<TmdbEpisode | null>(null);
@@ -358,7 +391,7 @@ export default function MediaDetailPage() {
 
   // ─── Data loading ─────────────────────────────────────────────────────────
 
-  // Resolve TVDB → TMDB when the indexer param says tvdb
+  // Resolve TVDB -> TMDB when the indexer param says tvdb
   useEffect(() => {
     if (indexer !== "tvdb") return;
 
@@ -375,6 +408,7 @@ export default function MediaDetailPage() {
     });
   }, [rawId, indexer]);
 
+  // Fetch TMDB details + Riven item in parallel once we have a TMDB ID
   useEffect(() => {
     if (resolvedTmdbId === null) return;
 
@@ -395,7 +429,9 @@ export default function MediaDetailPage() {
           mediaType === "movie"
             ? fetchMovieDetails(resolvedTmdbId!)
             : fetchTvDetails(resolvedTmdbId!),
-          fetch(`/api/riven/items/${resolvedTmdbId}?media_type=${mediaType}`)
+          fetch(
+            `/api/riven/items/${rivenLookupId}?media_type=${mediaType}`,
+          )
             .then((r) => (r.ok ? r.json() : null))
             .catch(() => null),
         ]);
@@ -411,7 +447,7 @@ export default function MediaDetailPage() {
           const tvData = details as TmdbTvDetails;
           setTvDetails(tvData);
 
-          // Select first real season (season 1 if present, else first available)
+          // Select first real season (prefer season 1, then first non-specials)
           const firstRealSeason =
             tvData.seasons.find((s) => s.season_number === 1) ??
             tvData.seasons.find((s) => s.season_number > 0) ??
@@ -427,7 +463,9 @@ export default function MediaDetailPage() {
         }
       } catch (err) {
         if (!controller.signal.aborted) {
-          setLoadError(err instanceof Error ? err.message : "Failed to load details.");
+          setLoadError(
+            err instanceof Error ? err.message : "Failed to load details.",
+          );
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -438,7 +476,9 @@ export default function MediaDetailPage() {
 
     loadData();
     return () => controller.abort();
-  }, [resolvedTmdbId, mediaType]);
+    // rivenLookupId is derived from rawId, which changes with params
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedTmdbId, mediaType, rivenLookupId]);
 
   // ─── Ratings loading ──────────────────────────────────────────────────────
 
@@ -448,7 +488,9 @@ export default function MediaDetailPage() {
     const controller = new AbortController();
     setRatingsLoading(true);
 
-    fetch(`/api/ratings/${resolvedTmdbId}?type=${mediaType}`, { signal: controller.signal })
+    fetch(`/api/ratings/${resolvedTmdbId}?type=${mediaType}`, {
+      signal: controller.signal,
+    })
       .then((r) => (r.ok ? r.json() : null))
       .then((data: RatingsResponse | null) => {
         setRatingsData(data);
@@ -467,7 +509,7 @@ export default function MediaDetailPage() {
   // ─── Season episode loading ───────────────────────────────────────────────
 
   useEffect(() => {
-    if (mediaType !== "tv" || !tvDetails || !selectedSeasonNumber || !resolvedTmdbId) return;
+    if (mediaType !== "tv" || !tvDetails || !resolvedTmdbId) return;
 
     const controller = new AbortController();
     setSeasonEpisodesLoading(true);
@@ -508,7 +550,9 @@ export default function MediaDetailPage() {
     : tvDetails?.images
       ? extractLogoPath(tvDetails.images)
       : null;
-  const logoUrl = logoPath ? `https://image.tmdb.org/t/p/w300${logoPath}` : null;
+  const logoUrl = logoPath
+    ? `https://image.tmdb.org/t/p/w300${logoPath}`
+    : null;
 
   const trailerKey = movieDetails?.videos
     ? extractTrailerKey(movieDetails.videos)
@@ -530,8 +574,11 @@ export default function MediaDetailPage() {
       ? formatRuntime(tvDetails.episode_run_time[0])
       : null;
 
-  const originalLanguage = (movieDetails?.original_language ?? tvDetails?.original_language ?? "")
-    .toUpperCase();
+  const originalLanguage = (
+    movieDetails?.original_language ??
+    tvDetails?.original_language ??
+    ""
+  ).toUpperCase();
 
   const certification = movieDetails?.release_dates
     ? extractMovieCertification(movieDetails.release_dates)
@@ -539,13 +586,40 @@ export default function MediaDetailPage() {
       ? extractTvCertification(tvDetails.content_ratings)
       : null;
 
-  const metaItems = [releaseYear, runtimeDisplay, originalLanguage, certification].filter(Boolean);
+  const tvStatus = tvDetails?.status ?? null;
+
+  const metaItems = [
+    releaseYear,
+    runtimeDisplay,
+    originalLanguage || null,
+    certification,
+    tvStatus,
+  ].filter(Boolean);
 
   const castMembers = movieDetails?.credits.cast ?? tvDetails?.credits.cast ?? [];
-  const recommendations = movieDetails?.recommendations.results ?? tvDetails?.recommendations.results ?? [];
-  const similarItems = movieDetails?.similar.results ?? tvDetails?.similar.results ?? [];
+  const recommendations =
+    movieDetails?.recommendations.results ??
+    tvDetails?.recommendations.results ??
+    [];
+  const similarItems =
+    movieDetails?.similar.results ?? tvDetails?.similar.results ?? [];
 
-  const jellyfinEntry = resolvedTmdbId ? tmdbMap.get(resolvedTmdbId) : undefined;
+  const jellyfinEntry = resolvedTmdbId
+    ? tmdbMap.get(resolvedTmdbId)
+    : undefined;
+
+  // ─── Derived Riven state for current season/episode ────────────────────────
+
+  const selectedRivenSeason =
+    rivenItem?.seasons?.find(
+      (s) => s.season_number === selectedSeasonNumber,
+    ) ?? null;
+
+  const episodeSheetRivenEpisode = selectedEpisode
+    ? (selectedRivenSeason?.episodes?.find(
+        (e) => e.episode_number === selectedEpisode.episode_number,
+      ) ?? null)
+    : null;
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -571,10 +645,54 @@ export default function MediaDetailPage() {
     }
   }, [resolvedTmdbId, title]);
 
-  const handleEpisodeClick = useCallback((episode: TmdbEpisode) => {
-    setSelectedEpisode(episode);
-    setIsEpisodeSheetOpen(true);
-  }, []);
+  const handleTvRequest = useCallback(async () => {
+    if (!resolvedTmdbId) return;
+    setRequestingTvShow(true);
+    try {
+      const result = await requestTvShow(resolvedTmdbId);
+      if (result.success) {
+        toast.success(`${title} requested`);
+      } else {
+        toast.error(result.message);
+      }
+    } catch {
+      toast.error("Failed to submit request");
+    } finally {
+      setRequestingTvShow(false);
+    }
+  }, [resolvedTmdbId, title]);
+
+  const handleEpisodeClick = useCallback(
+    async (episode: TmdbEpisode) => {
+      const rivenEp = selectedRivenSeason?.episodes?.find(
+        (e) => e.episode_number === episode.episode_number,
+      );
+
+      // If the episode is Completed and we have a Jellyfin series entry,
+      // try to navigate directly to the player
+      if (rivenEp?.state === "Completed" && jellyfinEntry) {
+        try {
+          const episodeJellyfinId = await findJellyfinEpisodeId(
+            jellyfinEntry.jellyfinId,
+            episode.season_number,
+            episode.episode_number,
+          );
+
+          if (episodeJellyfinId) {
+            router.push(`/player/${episodeJellyfinId}`);
+            return;
+          }
+        } catch {
+          // Fall through to sheet if lookup fails
+        }
+      }
+
+      // Open the detail sheet for non-completed episodes or if lookup failed
+      setSelectedEpisode(episode);
+      setIsEpisodeSheetOpen(true);
+    },
+    [selectedRivenSeason, jellyfinEntry, router],
+  );
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -585,7 +703,11 @@ export default function MediaDetailPage() {
       <div className="flex min-h-[50vh] items-center justify-center px-8">
         <div className="text-center">
           <p className="text-muted-foreground text-lg">{loadError}</p>
-          <Button variant="outline" className="mt-4" onClick={() => router.back()}>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => router.back()}
+          >
             Go back
           </Button>
         </div>
@@ -593,44 +715,16 @@ export default function MediaDetailPage() {
     );
   }
 
-  // Build TV show stub for RequestSheet (which needs a TmdbTvShow shape)
-  const tvShowForRequest: TmdbTvShow | null =
-    tvDetails
-      ? {
-          id: tvDetails.id,
-          name: tvDetails.name,
-          original_name: tvDetails.original_name,
-          overview: tvDetails.overview,
-          poster_path: tvDetails.poster_path,
-          backdrop_path: tvDetails.backdrop_path,
-          first_air_date: tvDetails.first_air_date,
-          vote_average: tvDetails.vote_average,
-          vote_count: tvDetails.vote_count,
-          genre_ids: tvDetails.genres.map((g) => g.id),
-          popularity: 0,
-          adult: false,
-          original_language: tvDetails.original_language,
-          origin_country: [],
-          media_type: "tv",
-        }
-      : null;
-
-  // Find riven season/episode data
-  const selectedRivenSeason = rivenItem?.seasons?.find(
-    (s) => s.season_number === selectedSeasonNumber
-  ) ?? null;
-
-  const episodeSheetRivenEpisode = selectedEpisode
-    ? selectedRivenSeason?.episodes?.find(
-        (e) => e.episode_number === selectedEpisode.episode_number
-      ) ?? null
-    : null;
+  // Whether the item exists in Riven (regardless of completion state)
+  const isInRiven = rivenItem !== null;
+  // Whether the item is playable from Jellyfin
+  const isInJellyfin = jellyfinEntry !== undefined;
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden">
       {/* Fixed blurred backdrop */}
       {backdropUrl && (
-        <div className="fixed top-0 left-0 z-0 h-screen w-full pointer-events-none">
+        <div className="pointer-events-none fixed top-0 left-0 z-0 h-screen w-full">
           <Image
             src={backdropUrl}
             alt=""
@@ -653,18 +747,21 @@ export default function MediaDetailPage() {
               className="relative mb-6 flex h-[40vh] max-h-[600px] min-h-[350px] items-end justify-between overflow-hidden rounded-3xl bg-cover bg-center shadow-2xl transition-all duration-500 md:mb-10"
               style={
                 !showTrailer
-                  ? { backgroundImage: `url('${backdropUrl}')`, padding: "1.5rem" }
+                  ? {
+                      backgroundImage: `url('${backdropUrl}')`,
+                      padding: "1.5rem",
+                    }
                   : { backgroundImage: `url('${backdropUrl}')` }
               }
             >
               {/* Gradient overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-              {/* Border overlay to prevent bright edge glitch */}
+              {/* Border overlay */}
               <div className="border-border/10 pointer-events-none absolute inset-0 rounded-3xl border" />
 
               {!showTrailer ? (
                 <div className="relative z-10 flex w-full items-end justify-between md:p-6">
-                  {/* Logo or spacer */}
+                  {/* Logo bottom-left */}
                   {logoUrl ? (
                     <Image
                       src={logoUrl}
@@ -678,9 +775,9 @@ export default function MediaDetailPage() {
                     <div />
                   )}
 
-                  {/* Action buttons */}
+                  {/* Play + Trailer buttons bottom-right */}
                   <div className="flex gap-2 md:gap-4">
-                    {jellyfinEntry && (
+                    {isInJellyfin && (
                       <Button
                         variant="secondary"
                         size="sm"
@@ -730,7 +827,7 @@ export default function MediaDetailPage() {
         {/* ── Main content ─────────────────────────────────────────────────── */}
         <div className="px-8 pb-24 md:px-20 lg:px-24">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[auto_1fr] lg:gap-6">
-            {/* Poster column — hidden on mobile */}
+            {/* Poster column -- hidden on mobile */}
             <div className="hidden lg:block">
               <PortraitCard
                 title={title}
@@ -756,71 +853,84 @@ export default function MediaDetailPage() {
                 )}
               </div>
 
-              {/* Play button — when item is in Jellyfin library */}
-              {jellyfinEntry && (
-                <Button
-                  size="default"
-                  onClick={handlePlay}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 px-6 font-bold"
-                >
-                  <Play className="mr-1.5 h-4 w-4 fill-current" />
-                  Play
-                </Button>
-              )}
+              {/* Consumer action buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Play -- when in Jellyfin */}
+                {isInJellyfin && (
+                  <Button
+                    size="default"
+                    onClick={handlePlay}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 px-6 font-bold"
+                  >
+                    <Play className="mr-1.5 h-4 w-4 fill-current" />
+                    Play
+                  </Button>
+                )}
 
-              {/* Request button — only when NOT in Jellyfin library AND not in Riven */}
-              {!jellyfinEntry && !rivenItem && (
-                <div className="flex flex-wrap items-center gap-2">
-                  {mediaType === "movie" ? (
-                    <Button
-                      variant="secondary"
-                      size="default"
-                      disabled={requestingMovie}
-                      onClick={handleMovieRequest}
-                      className="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary border bg-transparent px-4"
-                    >
-                      {requestingMovie ? (
-                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Download className="mr-1.5 h-4 w-4" />
-                      )}
-                      Request
-                    </Button>
-                  ) : tvShowForRequest ? (
-                    <>
+                {/* Request -- when NOT in Jellyfin AND NOT in Riven */}
+                {!isInJellyfin && !isInRiven && (
+                  <>
+                    {mediaType === "movie" ? (
                       <Button
                         variant="secondary"
                         size="default"
-                        onClick={() => setShowRequestSheet(true)}
+                        disabled={requestingMovie}
+                        onClick={handleMovieRequest}
                         className="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary border bg-transparent px-4"
                       >
-                        <Download className="mr-1.5 h-4 w-4" />
+                        {requestingMovie ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="mr-1.5 h-4 w-4" />
+                        )}
                         Request
                       </Button>
-                      <RequestSheet
-                        item={tvShowForRequest}
-                        isOpen={showRequestSheet}
-                        onClose={() => setShowRequestSheet(false)}
-                        onRequestSubmitted={() => setShowRequestSheet(false)}
-                      />
-                    </>
-                  ) : null}
-                </div>
-              )}
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        size="default"
+                        disabled={requestingTvShow}
+                        onClick={handleTvRequest}
+                        className="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary border bg-transparent px-4"
+                      >
+                        {requestingTvShow ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="mr-1.5 h-4 w-4" />
+                        )}
+                        Request
+                      </Button>
+                    )}
+                  </>
+                )}
 
-              {/* Status badge — when Riven is tracking this item */}
-              {rivenItem && (
-                <StatusBadge state={rivenItem.state} />
-              )}
+                {/* Request More -- when IS in Riven AND is TV */}
+                {isInRiven && mediaType === "tv" && (
+                  <Button
+                    variant="secondary"
+                    size="default"
+                    disabled={requestingTvShow}
+                    onClick={handleTvRequest}
+                    className="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary border bg-transparent px-4"
+                  >
+                    {requestingTvShow ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-1.5 h-4 w-4" />
+                    )}
+                    Request More
+                  </Button>
+                )}
+              </div>
 
               {/* Metadata line */}
               {metaItems.length > 0 && (
-                <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <div className="text-muted-foreground flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm">
                   {metaItems.map((item, index) => (
                     <Fragment key={index}>
                       <span>{item}</span>
                       {index < metaItems.length - 1 && (
-                        <span className="text-border">•</span>
+                        <span className="text-border">&bull;</span>
                       )}
                     </Fragment>
                   ))}
@@ -862,7 +972,9 @@ export default function MediaDetailPage() {
                           className="h-6 w-6 object-contain"
                         />
                       )}
-                      <span className="text-base font-semibold">{score.score}</span>
+                      <span className="text-base font-semibold">
+                        {score.score}
+                      </span>
                     </a>
                   ))}
                 </div>
@@ -890,25 +1002,35 @@ export default function MediaDetailPage() {
               <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-none">
                 {tvDetails.seasons.map((season) => {
                   const rivenSeason = rivenItem?.seasons?.find(
-                    (s) => s.season_number === season.season_number
+                    (s) => s.season_number === season.season_number,
                   );
-                  const isSelected = selectedSeasonNumber === season.season_number;
+                  const isSelected =
+                    selectedSeasonNumber === season.season_number;
 
                   return (
                     <button
                       key={season.id}
-                      onClick={() => setSelectedSeasonNumber(season.season_number)}
+                      onClick={() =>
+                        setSelectedSeasonNumber(season.season_number)
+                      }
                       className={`group relative shrink-0 block transition-all ${
                         isSelected ? "" : "opacity-60 hover:opacity-90"
                       }`}
                     >
                       <PortraitCard
-                        title={season.season_number === 0 ? "Specials" : `Season ${season.season_number}`}
+                        title={
+                          season.season_number === 0
+                            ? "Specials"
+                            : `Season ${season.season_number}`
+                        }
                         posterUrl={tmdbPosterUrl(season.poster_path, "medium")}
                         showContent
                         topRight={
                           rivenSeason?.state ? (
-                            <StatusBadge state={rivenSeason.state} size="default" />
+                            <StatusBadge
+                              state={rivenSeason.state}
+                              size="default"
+                            />
                           ) : undefined
                         }
                         className="w-28 md:w-32 lg:w-36"
@@ -924,12 +1046,15 @@ export default function MediaDetailPage() {
           {mediaType === "tv" && (
             <section className="mt-8 md:mt-12">
               <SectionHeading
-                title={`Episodes — Season ${selectedSeasonNumber}`}
+                title={`Episodes \u2014 Season ${selectedSeasonNumber}`}
               />
               {seasonEpisodesLoading ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3 2xl:grid-cols-4">
                   {[1, 2, 3, 4].map((i) => (
-                    <Skeleton key={i} className="aspect-video w-full rounded-xl" />
+                    <Skeleton
+                      key={i}
+                      className="aspect-video w-full rounded-xl"
+                    />
                   ))}
                 </div>
               ) : (
@@ -937,7 +1062,8 @@ export default function MediaDetailPage() {
                   {seasonEpisodes.map((episode) => {
                     const rivenEpisode =
                       selectedRivenSeason?.episodes?.find(
-                        (e) => e.episode_number === episode.episode_number
+                        (e) =>
+                          e.episode_number === episode.episode_number,
                       ) ?? null;
 
                     return (
@@ -955,7 +1081,11 @@ export default function MediaDetailPage() {
                               : null
                           }
                           airedDate={episode.air_date ?? undefined}
-                          runtime={episode.runtime ? `${episode.runtime} min` : undefined}
+                          runtime={
+                            episode.runtime
+                              ? `${episode.runtime} min`
+                              : undefined
+                          }
                           state={rivenEpisode?.state}
                           overview={episode.overview}
                           className="h-full transition-transform duration-300 group-hover:scale-[1.01] group-hover:shadow-lg"
@@ -1040,6 +1170,7 @@ export default function MediaDetailPage() {
           setIsEpisodeSheetOpen(false);
           setSelectedEpisode(null);
         }}
+        isMobile={isMobile}
       />
     </div>
   );

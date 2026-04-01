@@ -1457,6 +1457,48 @@ export async function fetchAllLibraryTmdbIds(): Promise<
   return results;
 }
 
+/**
+ * Find a specific Jellyfin episode ID by series ID, season number, and episode number.
+ * Used for direct episode playback navigation from the detail page.
+ */
+export async function findJellyfinEpisodeId(
+  seriesJellyfinId: string,
+  seasonNumber: number,
+  episodeNumber: number,
+): Promise<string | null> {
+  const { serverUrl, user } = await getAuthData();
+  if (!user.AccessToken) throw new Error("No access token found");
+
+  const jellyfinInstance = createJellyfinInstance();
+  const api = jellyfinInstance.createApi(serverUrl);
+  api.accessToken = user.AccessToken;
+
+  try {
+    const itemsApi = getItemsApi(api);
+    const { data } = await itemsApi.getItems({
+      userId: user.Id,
+      parentId: seriesJellyfinId,
+      includeItemTypes: [BaseItemKind.Episode],
+      recursive: true,
+      fields: [ItemFields.ProviderIds],
+    });
+
+    const match = data.Items?.find(
+      (ep) =>
+        ep.ParentIndexNumber === seasonNumber &&
+        ep.IndexNumber === episodeNumber,
+    );
+
+    return match?.Id ?? null;
+  } catch (error) {
+    console.error(
+      `Failed to find Jellyfin episode S${seasonNumber}E${episodeNumber}:`,
+      error,
+    );
+    return null;
+  }
+}
+
 export async function getNextEpisodeForSeries(
   seriesId: string,
 ): Promise<JellyfinItem | null> {
