@@ -99,6 +99,13 @@
   color-scheme: dark;
 }
 
+/* Sidebar — semi-transparent so the viewport gradient shows through */
+[data-sidebar="sidebar"] {
+  background: oklch(0.1822 0 0 / 0.4) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
 /* Sidebar active item — icon color only, no background box */
 [data-sidebar="menu-button"][data-active="true"] {
   background-color: transparent !important;
@@ -146,29 +153,15 @@
     }
   }
 
-  /* Custom scrollbar styles */
+  /* Hide scrollbars — scroll is functional, just invisible */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    display: none;
   }
 
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: var(--accent);
-    border-radius: 3px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: var(--accent);
-  }
-
-  /* Firefox scrollbar */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--accent) transparent;
+  html,
+  body {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
 

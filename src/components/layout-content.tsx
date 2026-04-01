@@ -106,6 +106,12 @@ function GlobalSearchBar() {
 export function LayoutContent({ children }: LayoutContentProps) {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
+      {/* Cinematic viewport background — fixed, behind everything including sidebar */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black" />
+        <div className="absolute top-[-20%] left-[-10%] h-[600px] w-[600px] rounded-full bg-primary/5 blur-[120px]" />
+        <div className="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]" />
+      </div>
       <SidebarProvider
         defaultOpen={false}
         style={
