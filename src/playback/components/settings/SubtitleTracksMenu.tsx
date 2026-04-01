@@ -61,6 +61,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
   const [onlineSearching, setOnlineSearching] = useState(false);
   const [onlineSearchDone, setOnlineSearchDone] = useState(false);
   const [loadingOnlineIndex, setLoadingOnlineIndex] = useState<number | null>(null);
+  const [activeOnlineIndex, setActiveOnlineIndex] = useState<number | null>(null);
   const [subdlAvailable, setSubdlAvailable] = useState(false);
 
   const [subtitleSize, setSubtitleSize] = useState<number>(() => {
@@ -174,6 +175,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
         ...(episodeNumber ? { episode: String(episodeNumber) } : {}),
       });
       await manager.setSubtitleUrl(`/api/subdl/download?${params}`);
+      setActiveOnlineIndex(index);
     } catch (error) {
       console.error("Failed to load online subtitle:", error);
     } finally {
@@ -197,6 +199,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
       manager.reportState({ subtitleStreamIndex: 9999 });
       return;
     }
+    setActiveOnlineIndex(null);
     manager.setSubtitleStreamIndex(index);
   };
 
@@ -287,33 +290,36 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
               <DropdownMenuSeparator className="bg-white/10" />
 
               {/* Online results list */}
-              {onlineResults.map((subtitle, i) => (
-                <button
-                  key={`online-${i}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleLoadOnline(subtitle, i);
-                  }}
-                  disabled={loadingOnlineIndex !== null}
-                  className={`w-full flex items-center gap-2.5 px-5 py-2 transition-colors text-left ${
-                    isOnlineActive ? "text-white/90" : "text-white/90 hover:bg-white/10"
-                  }`}
-                >
-                  {loadingOnlineIndex === i ? (
-                    <Loader2 size={12} className="animate-spin shrink-0" />
-                  ) : (
-                    <Globe size={12} className="shrink-0 text-white/30" />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm truncate">{subtitle.releaseName}</p>
-                    <p className="text-[11px] text-white/40 truncate">
-                      {subtitle.language}
-                      {subtitle.author && subtitle.author !== "none" ? ` \u00b7 ${subtitle.author}` : ""}
-                    </p>
-                  </div>
-                </button>
-              ))}
+              {onlineResults.map((subtitle, i) => {
+                const isThisActive = isOnlineActive && activeOnlineIndex === i;
+                return (
+                  <button
+                    key={`online-${i}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleLoadOnline(subtitle, i);
+                    }}
+                    disabled={loadingOnlineIndex !== null}
+                    className={`w-full flex items-center gap-2.5 px-5 py-2 transition-colors text-left ${
+                      isThisActive ? "bg-white/15 text-white" : "text-white/90 hover:bg-white/10"
+                    }`}
+                  >
+                    {loadingOnlineIndex === i ? (
+                      <Loader2 size={12} className="animate-spin shrink-0 text-white/70" />
+                    ) : (
+                      <Globe size={12} className={`shrink-0 ${isThisActive ? "text-primary" : "text-white/30"}`} />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm truncate">{subtitle.releaseName}</p>
+                      <p className="text-[11px] text-white/40 truncate">
+                        {subtitle.language}
+                        {subtitle.author && subtitle.author !== "none" ? ` \u00b7 ${subtitle.author}` : ""}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
 
               {/* Search button — only shows if not yet searched */}
               {!onlineSearchDone && !onlineSearching && (

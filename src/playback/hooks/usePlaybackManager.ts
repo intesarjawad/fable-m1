@@ -26,40 +26,95 @@ function convertSubtitleToVTT(content: string): string {
     return content;
   }
 
-  let vtt = "WEBVTT\n\n";
+  // Detect ASS/SSA format
+  if (content.includes("[Script Info]") || content.includes("[Events]")) {
+    return convertASSToVTT(content);
+  }
 
-  // Line-by-line parsing — more robust than block splitting.
-  // SRT files from different sources have inconsistent blank line spacing.
+  return convertSRTToVTT(content);
+}
+
+function convertASSToVTT(content: string): string {
+  let vtt = "WEBVTT\n\n";
+  const lines = content.split("\n");
+  let inEvents = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("[Events]")) {
+      inEvents = true;
+      continue;
+    }
+    if (trimmed.startsWith("[") && inEvents) {
+      break; // next section
+    }
+
+    if (!inEvents || !trimmed.startsWith("Dialogue:")) continue;
+
+    // Dialogue: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+    const afterDialogue = trimmed.substring("Dialogue:".length).trim();
+    const parts = afterDialogue.split(",");
+    if (parts.length < 10) continue;
+
+    const startRaw = parts[1].trim(); // H:MM:SS.cc
+    const endRaw = parts[2].trim();
+    const text = parts.slice(9).join(",").trim();
+
+    if (!text) continue;
+
+    const startVTT = assTimestampToVTT(startRaw);
+    const endVTT = assTimestampToVTT(endRaw);
+    if (!startVTT || !endVTT) continue;
+
+    // Strip ASS override tags like {\b1}, {\i1}, {\pos(x,y)}, etc.
+    const cleanText = text
+      .replace(/\{[^}]*\}/g, "")
+      .replace(/\\N/g, "\n")
+      .replace(/\\n/g, "\n")
+      .trim();
+
+    if (cleanText) {
+      vtt += `${startVTT} --> ${endVTT}\n${cleanText}\n\n`;
+    }
+  }
+
+  return vtt;
+}
+
+// ASS timestamps: H:MM:SS.cc → VTT: HH:MM:SS.mmm
+function assTimestampToVTT(ts: string): string | null {
+  const match = ts.match(/^(\d+):(\d{2}):(\d{2})\.(\d{2})$/);
+  if (!match) return null;
+  const [, h, m, s, cs] = match;
+  return `${h.padStart(2, "0")}:${m}:${s}.${cs}0`;
+}
+
+function convertSRTToVTT(content: string): string {
+  let vtt = "WEBVTT\n\n";
   const lines = content.split("\n");
   let i = 0;
 
   while (i < lines.length) {
     const line = lines[i].trim();
 
-    // Look for a timestamp line anywhere
     if (line.includes("-->")) {
       const vttTimeline = line.replace(/,/g, ".");
-
-      // Collect text lines until blank line or next sequence number
       const textLines: string[] = [];
       i++;
       while (i < lines.length) {
         const textLine = lines[i];
         const trimmed = textLine.trim();
-        // Stop at blank lines or lines that look like sequence numbers
-        // (a sequence number is a standalone integer followed by a blank or timestamp)
         if (trimmed === "") {
           i++;
           break;
         }
-        // Check if this line is a sequence number (all digits) and next line has -->
         if (/^\d+$/.test(trimmed) && i + 1 < lines.length && lines[i + 1].includes("-->")) {
           break;
         }
         textLines.push(textLine);
         i++;
       }
-
       if (textLines.length > 0) {
         vtt += `${vttTimeline}\n${textLines.join("\n")}\n\n`;
       }
