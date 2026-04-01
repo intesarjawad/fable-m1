@@ -213,7 +213,7 @@ function ExplorePageInner() {
       )}
 
       {/* Page content */}
-      <div className="relative z-10 mx-auto flex w-full max-w-[2400px] flex-col gap-6 px-6 pt-6 pb-24 md:px-12 md:pt-16 md:pb-12 lg:px-16">
+      <div className="relative z-10 mx-auto flex w-full max-w-[2400px] flex-col gap-6 px-6 pt-20 pb-24 md:px-12 md:pt-20 md:pb-12 lg:px-16">
         {/* Header */}
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-4">

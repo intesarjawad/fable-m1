@@ -107,7 +107,7 @@ export default function DiscoverPage() {
   // Loading state
   if (loading) {
     return (
-      <div className="relative px-4 py-3 max-w-full overflow-hidden">
+      <div className="relative px-4 pt-20 pb-3 max-w-full overflow-hidden">
         <AuroraBackground />
         <div className="relative z-10 mb-8">
           <SearchBar />
@@ -123,7 +123,7 @@ export default function DiscoverPage() {
   // TMDB not configured
   if (configured === false) {
     return (
-      <div className="relative px-4 py-3 max-w-full overflow-hidden">
+      <div className="relative px-4 pt-20 pb-3 max-w-full overflow-hidden">
         <AuroraBackground />
         <div className="relative z-10 mb-8">
           <SearchBar />

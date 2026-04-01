@@ -90,7 +90,7 @@ function Search() {
   );
 
   return (
-    <div className="relative px-4 py-3 max-w-full">
+    <div className="relative px-4 pt-20 pb-3 max-w-full">
       <VibrantAuroraBackground amplitude={0.8} blend={0.4} />
 
       <div className="relative z-99 mb-8">

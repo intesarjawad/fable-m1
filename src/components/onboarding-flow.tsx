@@ -70,7 +70,7 @@ export function OnboardingFlow() {
 
   if (currentStep === "loading") {
     return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-[#050508]" />
+      <div className="flex min-h-screen w-full items-center justify-center bg-background" />
     );
   }
 
@@ -94,6 +94,6 @@ export function OnboardingFlow() {
   }
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-[#050508]" />
+    <div className="flex min-h-screen w-full items-center justify-center bg-background" />
   );
 }

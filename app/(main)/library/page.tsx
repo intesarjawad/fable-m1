@@ -226,7 +226,7 @@ function LibraryInner() {
         <div className="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]" />
       </div>
 
-      <div className="relative z-10 px-4 py-6 max-w-full overflow-hidden">
+      <div className="relative z-10 px-4 pt-20 pb-6 max-w-full overflow-hidden">
       <div className="mx-auto w-full max-w-[2000px] space-y-6">
 
         {/* ── Header ── */}
@@ -405,7 +405,7 @@ export default function LibraryPage() {
           <div className="pointer-events-none fixed inset-0 z-0">
             <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black" />
           </div>
-          <div className="relative z-10 px-4 py-6">
+          <div className="relative z-10 px-4 pt-20 pb-6">
             <div className="mx-auto w-full max-w-[2000px] space-y-6">
               <div className="h-16 w-64 animate-pulse rounded-xl bg-zinc-900/60" />
               <LibrarySkeletonGrid />

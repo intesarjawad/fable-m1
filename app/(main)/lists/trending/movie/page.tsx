@@ -137,7 +137,7 @@ export default function TrendingMoviesPage() {
         <div className="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]" />
       </div>
 
-      <div className="relative z-10 mx-auto flex w-full max-w-[2400px] flex-col gap-8 px-6 pt-6 pb-24 md:px-12 md:pt-12 lg:px-16">
+      <div className="relative z-10 mx-auto flex w-full max-w-[2400px] flex-col gap-8 px-6 pt-20 pb-24 md:px-12 md:pt-20 lg:px-16">
         {/* Header */}
         <div className="flex flex-col gap-4">
           <Link

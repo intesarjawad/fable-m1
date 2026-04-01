@@ -10,7 +10,6 @@ import {
 } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { VibrantAuroraBackground } from "../components/vibrant-aurora-background";
 import { checkServerHealth, setServerUrl } from "../actions";
 import { Loader2, Server, CheckCircle, Globe, Shield } from "lucide-react";
 import axios from "axios";
@@ -134,12 +133,11 @@ export function ServerSetup({ onNext }: ServerSetupProps) {
   if (urlLoading) return;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative w-full">
-      <VibrantAuroraBackground amplitude={0.8} blend={0.4} />
-      <Card className="w-full max-w-md relative z-10">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 w-full">
+      <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 p-3 bg-primary/10 rounded-full w-fit">
-            <Server className="h-8 w-8 text-primary" />
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
+            <Server className="h-5 w-5 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl">Connect to Jellyfin</CardTitle>
           <CardDescription>

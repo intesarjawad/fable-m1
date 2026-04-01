@@ -125,6 +125,7 @@ interface EpisodeSheetProps {
   showTitle: string;
   isOpen: boolean;
   onClose: () => void;
+  onPlay?: () => void;
   isMobile: boolean;
 }
 
@@ -144,6 +145,7 @@ function EpisodeDetailSheet({
   showTitle,
   isOpen,
   onClose,
+  onPlay,
   isMobile,
 }: EpisodeSheetProps) {
   if (!episode) return null;
@@ -198,7 +200,10 @@ function EpisodeDetailSheet({
           )}
 
           {stillUrl && (
-            <div className="relative w-full max-w-[640px] overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10">
+            <div
+              className={`relative w-full max-w-[640px] overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 group${onPlay ? " cursor-pointer" : ""}`}
+              onClick={onPlay}
+            >
               <Image
                 src={stillUrl}
                 alt={episode.name}
@@ -207,6 +212,13 @@ function EpisodeDetailSheet({
                 className="aspect-video w-full object-cover"
                 unoptimized
               />
+              {onPlay && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary shadow-lg">
+                    <Play className="h-7 w-7 fill-primary-foreground text-primary-foreground ml-1" />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -384,6 +396,7 @@ export default function MediaDetailPage() {
   // Episode sheet state
   const [selectedEpisode, setSelectedEpisode] = useState<TmdbEpisode | null>(null);
   const [isEpisodeSheetOpen, setIsEpisodeSheetOpen] = useState(false);
+  const [episodeJellyfinId, setEpisodeJellyfinId] = useState<string | null>(null);
 
   // Ratings
   const [ratingsData, setRatingsData] = useState<RatingsResponse | null>(null);
@@ -683,30 +696,25 @@ export default function MediaDetailPage() {
         (e) => e.episode_number === episode.episode_number,
       );
 
-      // If the episode is Completed and we have a Jellyfin series entry,
-      // try to navigate directly to the player
+      // Resolve Jellyfin ID for completed episodes so the sheet can show a play button
+      let resolvedJellyfinId: string | null = null;
       if (rivenEp?.state === "Completed" && jellyfinEntry) {
         try {
-          const episodeJellyfinId = await findJellyfinEpisodeId(
+          resolvedJellyfinId = await findJellyfinEpisodeId(
             jellyfinEntry.jellyfinId,
             episode.season_number,
             episode.episode_number,
-          );
-
-          if (episodeJellyfinId) {
-            router.push(`/player/${episodeJellyfinId}`);
-            return;
-          }
+          ) ?? null;
         } catch {
-          // Fall through to sheet if lookup fails
+          // Ignore — sheet will just not show play overlay
         }
       }
 
-      // Open the detail sheet for non-completed episodes or if lookup failed
+      setEpisodeJellyfinId(resolvedJellyfinId);
       setSelectedEpisode(episode);
       setIsEpisodeSheetOpen(true);
     },
-    [selectedRivenSeason, jellyfinEntry, router],
+    [selectedRivenSeason, jellyfinEntry],
   );
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -791,19 +799,8 @@ export default function MediaDetailPage() {
                     <div />
                   )}
 
-                  {/* Play + Trailer buttons bottom-right */}
+                  {/* Trailer button bottom-right */}
                   <div className="flex gap-2 md:gap-4">
-                    {canPlay && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={handlePlay}
-                        className="border border-white/10 bg-white/10 px-6 text-sm font-bold text-white shadow-lg backdrop-blur-md transition-all hover:scale-105 hover:bg-white/20"
-                      >
-                        <Play className="mr-2 h-4 w-4 fill-current" />
-                        Play
-                      </Button>
-                    )}
                     {trailerKey && (
                       <Button
                         variant="secondary"
@@ -1185,7 +1182,9 @@ export default function MediaDetailPage() {
         onClose={() => {
           setIsEpisodeSheetOpen(false);
           setSelectedEpisode(null);
+          setEpisodeJellyfinId(null);
         }}
+        onPlay={episodeJellyfinId ? () => router.push(`/player/${episodeJellyfinId}`) : undefined}
         isMobile={isMobile}
       />
     </div>

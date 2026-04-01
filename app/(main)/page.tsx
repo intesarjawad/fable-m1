@@ -234,7 +234,7 @@ export default function HomePage() {
 
       <div className="relative z-10 flex flex-col gap-10 pb-24 md:gap-12">
         {/* Hero Carousel — no top padding so it sits behind the floating search bar gradient */}
-        <div className="w-full px-4 md:px-8">
+        <div className="w-full">
           <HeroCarousel items={heroItems} />
         </div>
 

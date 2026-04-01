@@ -373,7 +373,7 @@ export default function RivenCalendarPage() {
         <div className="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]" />
       </div>
 
-      <div className="relative z-10 px-4 py-6 max-w-full overflow-hidden">
+      <div className="relative z-10 px-4 pt-20 pb-6 max-w-full overflow-hidden">
       <div className="mx-auto w-full max-w-[1600px] space-y-4">
         {/* ── Header card ── */}
         <div className="rounded-2xl border border-white/10 bg-card shadow-lg">
