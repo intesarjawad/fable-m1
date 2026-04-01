@@ -184,11 +184,13 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     if (!bestOnlineSub) return;
     setLoadingOnline(true);
     try {
+      const isEpisode = currentItem?.Type === "Episode";
+      const episodeNumber = isEpisode ? (currentItem as any)?.IndexNumber : undefined;
+
       const params = new URLSearchParams({
         path: bestOnlineSub.url,
-        ...(currentItem?.Id ? { itemId: currentItem.Id } : {}),
         language: bestOnlineSub.languageCode.toLowerCase() || "eng",
-        ...(bestOnlineSub.hearingImpaired ? { hi: "true" } : {}),
+        ...(episodeNumber ? { episode: String(episodeNumber) } : {}),
       });
       await manager.setSubtitleUrl(`/api/subdl/download?${params}`);
     } catch (error) {
