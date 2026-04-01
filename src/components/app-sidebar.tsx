@@ -61,7 +61,8 @@ import {
   History,
   Signal,
   FastForward,
-  Compass,
+  Search,
+  CalendarDays,
 } from "lucide-react";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { useSyncPlay } from "@/src/contexts/syncplay-context";
@@ -323,14 +324,32 @@ export function AppSidebar() {
 
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <Link href="/discover" onClick={() => setOpenMobile(false)}>
-                    <Compass className="h-4 w-4" />
-                    <span>Discover</span>
+                  <Link href="/explore" onClick={() => setOpenMobile(false)}>
+                    <Search className="h-4 w-4" />
+                    <span>Explore</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Libraries Section */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/library" onClick={() => setOpenMobile(false)}>
+                    <Library className="h-4 w-4" />
+                    <span>Library</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/calendar" onClick={() => setOpenMobile(false)}>
+                    <CalendarDays className="h-4 w-4" />
+                    <span>Calendar</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Jellyfin Libraries Section */}
               <Collapsible
                 asChild
                 defaultOpen={false}

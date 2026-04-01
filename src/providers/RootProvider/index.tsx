@@ -11,22 +11,9 @@ export default function RootProvider({
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme="system"
-      enableSystem
+      defaultTheme="dark"
+      forcedTheme="dark"
       disableTransitionOnChange
-      themes={[
-        "light",
-        "dark",
-        "cinematic-theatre-black",
-        "neon-grid",
-        "emerald-ember",
-        "sunset-blocks",
-        "crimson-obelisk",
-        "peach-sorbet",
-        "lilac-dream",
-        "deep-velvet",
-        "glassmorphism",
-      ]}
     >
       <Toaster />
       <AuthProvider>

@@ -1,323 +1,377 @@
 "use client";
+
+import { useEffect, useState, useCallback, type ReactNode } from "react";
 import {
-  fetchResumeItems,
-  fetchLibraryItems,
-  fetchLiveTVItems,
-  fetchNextUpItems,
-} from "@/src/actions/media";
-import { getAuthData, getUserLibraries } from "@/src/actions/utils";
-import {
+  fetchTrendingAll,
   fetchTrendingMovies,
   fetchTrendingTv,
-  fetchPopularMovies,
-  fetchPopularTv,
-  isTmdbConfigured,
 } from "@/src/actions/tmdb";
-import { useAuthError } from "@/src/hooks/use-auth-error";
-import { MediaSection } from "@/src/components/media-section";
-import { DiscoverySection } from "@/src/components/discovery-section";
-import { SearchBar } from "@/src/components/search-component";
-import { AuroraBackground } from "@/src/components/aurora-background";
-import { useEffect, useState } from "react";
-import { useAtom } from "jotai";
-import {
-  homeLastVisitedTimeAtom,
-  homeServerUrlAtom,
-  homeUserAtom,
-  homeResumeItemsAtom,
-  homeNextupItemsAtom,
-  homeLibrariesAtom,
-  homeTrendingAtom,
-  homePopularMoviesAtom,
-  homePopularTvAtom,
-  discoveryLastFetchedAtom,
-} from "@/src/lib/atoms";
-import LoadingSpinner from "@/src/components/loading-spinner";
-import { HeroSection } from "@/src/components/hero/hero-section";
-import { useRouter } from "next/navigation";
-import ErrorWindow from "@/src/components/error-window";
-import { TrendingUp, Flame } from "lucide-react";
-import { useRequestState } from "@/src/hooks/use-request-state";
-import { useReconcileRequests } from "@/src/hooks/use-reconcile-requests";
+import { HeroCarousel } from "@/src/components/media/hero-carousel";
+import { MediaCarousel, MediaCarouselSlide } from "@/src/components/media/media-carousel";
+import { PortraitCard } from "@/src/components/media/portrait-card";
+import { PortraitCardSkeleton } from "@/src/components/media/portrait-card";
+import { TogglePill } from "@/src/components/media/toggle-pill";
+import { MediaLink } from "@/src/components/media/media-link";
 import { tmdbPosterUrl } from "@/src/lib/tmdb";
-import { OptimizedImage } from "@/src/components/optimized-image";
-import { ScrollArea, ScrollBar } from "@/src/components/ui/scroll-area";
+import type { TmdbMediaItem, TmdbMovie, TmdbTvShow } from "@/src/types/tmdb";
+import { getTmdbYear } from "@/src/types/tmdb";
+import Link from "next/link";
 
-const MAX_DISCOVERY_ITEMS = 20;
-
-export default function Home() {
-  const router = useRouter();
-
-  const [serverUrl, setServerUrl] = useAtom(homeServerUrlAtom);
-  const [user, setUser] = useAtom(homeUserAtom);
-  const [resumeItems, setResumeItems] = useAtom(homeResumeItemsAtom);
-  const [nextupItems, setNextupItems] = useAtom(homeNextupItemsAtom);
-  const [libraries, setLibraries] = useAtom(homeLibrariesAtom);
-  const [lastVisitedTime, setLastVisitedTime] = useAtom(homeLastVisitedTimeAtom);
-
-  const [homeTrending, setHomeTrending] = useAtom(homeTrendingAtom);
-  const [homePopularMovies, setHomePopularMovies] = useAtom(homePopularMoviesAtom);
-  const [homePopularTv, setHomePopularTv] = useAtom(homePopularTvAtom);
-  const [discoveryLastFetched, setDiscoveryLastFetched] = useAtom(discoveryLastFetchedAtom);
-
-  const { activeRequests } = useRequestState();
-  useReconcileRequests();
-  const { handleAuthError } = useAuthError();
-  const [loading, setLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    const now = Date.now();
-    // Only refetch if 60 seconds have passed since the page was last visited
-    if (now - lastVisitedTime < 60000) {
-      setLastVisitedTime(Date.now());
-      setLoading(false);
-      return;
-    }
-    async function fetchData() {
-      try {
-        const authData = await getAuthData();
-        setServerUrl(authData.serverUrl);
-        setUser(authData.user);
-
-        // Fetch resume items and libraries in parallel
-        const [resumeItemsResult, nextupItemsResult, userLibraries] =
-          await Promise.all([
-            fetchResumeItems(),
-            fetchNextUpItems(),
-            getUserLibraries(),
-          ]);
-
-        setResumeItems(resumeItemsResult);
-        setNextupItems(
-          nextupItemsResult.filter(
-            (item) =>
-              !resumeItemsResult.some(
-                (resumeItem) => resumeItem.Id === item.Id,
-              ),
-          ),
-        );
-
-        // Fetch items for each library in parallel
-        const libraryData = await Promise.all(
-          userLibraries.map(async (library) => {
-            const items =
-              library.CollectionType === "livetv"
-                ? (await fetchLiveTVItems(true)).items
-                : (await fetchLibraryItems({ id: library.Id!, collectionType: library.CollectionType }, 12)).items;
-            return { library, items };
-          }),
-        );
-
-        setLibraries(libraryData);
-        setLastVisitedTime(Date.now());
-
-        // Fetch TMDB discovery data (with its own 60s cache)
-        const shouldFetchDiscovery = now - discoveryLastFetched >= 60000;
-        if (shouldFetchDiscovery) {
-          const tmdbConfigured = await isTmdbConfigured();
-          if (tmdbConfigured) {
-            const [trendingMovies, trendingTv, popularMovies, popularTv] =
-              await Promise.all([
-                fetchTrendingMovies(),
-                fetchTrendingTv(),
-                fetchPopularMovies(),
-                fetchPopularTv(),
-              ]);
-
-            // Merge trending movies + TV into a single mixed list, sorted by popularity
-            const trending = [...trendingMovies, ...trendingTv]
-              .sort((a, b) => b.popularity - a.popularity)
-              .slice(0, MAX_DISCOVERY_ITEMS);
-
-            setHomeTrending(trending);
-            setHomePopularMovies(popularMovies.slice(0, MAX_DISCOVERY_ITEMS));
-            setHomePopularTv(popularTv.slice(0, MAX_DISCOVERY_ITEMS));
-            setDiscoveryLastFetched(Date.now());
-          }
-        }
-      } catch (error: unknown) {
-        console.error("Failed to load data:", error);
-
-        if (handleAuthError(error)) {
-          return;
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
-  }, [router]);
-
-  if (loading) return <LoadingSpinner />;
-
-  if (!libraries || serverUrl == null)
-    return (
-      <ErrorWindow message="Error loading Home Page. Please try again." />
-    );
-
-  const firstLibrary = libraries[0];
-  const remainingLibraries = libraries.slice(1);
-
+// Section heading with the left accent bar (matching riven's design)
+function SectionHeading({ children }: { children: ReactNode }) {
   return (
-      <div className="relative px-4 py-3 max-w-full overflow-hidden">
-        <AuroraBackground />
-
-        <div className="relative z-99 mb-8">
-          <div className="mb-6">
-            <SearchBar />
-          </div>
-        </div>
-
-        <div className="relative z-10 mb-4">
-          <h2 className="text-3xl font-semibold text-foreground mb-2 font-poppins">
-            Welcome back, {user?.Name}
-          </h2>
-          <p className="text-muted-foreground mb-6">
-            Continue watching or discover something new
-          </p>
-        </div>
-
-        <HeroSection serverUrl={serverUrl} />
-
-        {resumeItems.length > 0 && (
-          <MediaSection
-            sectionName="Continue Watching"
-            mediaItems={resumeItems}
-            serverUrl={serverUrl}
-            continueWatching
-            hideViewAll
-          />
-        )}
-
-        {nextupItems.length > 0 && (
-          <MediaSection
-            sectionName="Next Up"
-            mediaItems={nextupItems}
-            serverUrl={serverUrl}
-            continueWatching
-            hideViewAll
-          />
-        )}
-
-        {activeRequests.length > 0 && (
-          <MyRequestsRow requests={activeRequests} />
-        )}
-
-        {homeTrending.length > 0 && (
-          <DiscoverySection
-            sectionName="Trending This Week"
-            items={homeTrending}
-            icon={<TrendingUp className="h-6 w-6 text-emerald-400" />}
-          />
-        )}
-
-        {firstLibrary && (
-          <MediaSection
-            key={firstLibrary.library.Id}
-            library={firstLibrary.library}
-            sectionName={firstLibrary.library.Name}
-            mediaItems={firstLibrary.items}
-            serverUrl={serverUrl}
-          />
-        )}
-
-        {homePopularMovies.length > 0 && (
-          <DiscoverySection
-            sectionName="Popular Movies"
-            items={homePopularMovies}
-            icon={<Flame className="h-6 w-6 text-orange-400" />}
-          />
-        )}
-
-        {remainingLibraries.map(({ library, items }) => (
-          <MediaSection
-            key={library.Id}
-            library={library}
-            sectionName={library.Name}
-            mediaItems={items}
-            serverUrl={serverUrl}
-          />
-        ))}
-      </div>
+    <div className="flex items-center gap-3">
+      <div className="bg-primary h-6 w-1 rounded-full shadow-[0_0_10px_rgba(var(--primary-raw,139,92,246),0.5)]" />
+      <h2 className="text-foreground text-2xl font-bold tracking-tight drop-shadow-md">
+        {children}
+      </h2>
+    </div>
   );
 }
 
-// Simple horizontal row for tracked requests (v1 — poster + title + status badge)
-const STATUS_BADGE_STYLES: Record<string, string> = {
-  requested: "bg-sky-500/70",
-  "getting-ready": "bg-amber-500/70",
-  ready: "bg-emerald-500/70",
-  failed: "bg-red-500/70",
-};
+const VIEW_ALL_BUTTON_CLASS =
+  "text-muted-foreground border-white/10 bg-black/20 hover:bg-black/40 hover:text-foreground h-9 px-4 rounded-xl border text-xs font-bold backdrop-blur-md shadow-inner transition-all";
 
-const STATUS_LABELS: Record<string, string> = {
-  requested: "Requested",
-  "getting-ready": "Getting Ready",
-  ready: "Ready",
-  failed: "Failed",
-};
+const HERO_BACKDROP_ITEMS_LIMIT = 10;
+const CAROUSEL_ITEM_LIMIT = 20;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
-interface MyRequestsRowProps {
-  requests: Array<{
-    tmdbId: number;
-    mediaType: "movie" | "tv";
-    title: string;
-    posterPath: string | null;
-    status: string;
-  }>;
+type TrendingTimeWindow = "Today" | "This Week";
+
+// sessionStorage cache helpers
+function readFromCache<T>(key: string): T | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { ts: number; data: T };
+    if (Date.now() - parsed.ts > CACHE_TTL_MS) return null;
+    return parsed.data;
+  } catch {
+    return null;
+  }
 }
 
-function MyRequestsRow({ requests }: MyRequestsRowProps) {
+function writeToCache<T>(key: string, data: T): void {
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    // sessionStorage may be unavailable — not fatal
+  }
+}
+
+interface RecentlyAddedItem {
+  id: number | string;
+  title: string;
+  poster_path: string | null;
+  media_type: string;
+  year?: number | string;
+  indexer?: string;
+}
+
+export default function HomePage() {
+  // Hero — TMDB trending all/day (subset with backdrop)
+  const [heroItems, setHeroItems] = useState<TmdbMediaItem[]>([]);
+
+  // Recently Added — from Riven library API
+  const [recentlyAddedItems, setRecentlyAddedItems] = useState<RecentlyAddedItem[]>([]);
+  const [recentlyAddedLoaded, setRecentlyAddedLoaded] = useState(false);
+
+  // Trending Movies
+  const [trendingMovies, setTrendingMovies] = useState<TmdbMovie[]>([]);
+  const [trendingMoviesTimeWindow, setTrendingMoviesTimeWindow] = useState<TrendingTimeWindow>("Today");
+
+  // Trending TV
+  const [trendingTv, setTrendingTv] = useState<TmdbTvShow[]>([]);
+  const [trendingTvTimeWindow, setTrendingTvTimeWindow] = useState<TrendingTimeWindow>("Today");
+
+  // Trending Anime
+  const [trendingAnime, setTrendingAnime] = useState<RecentlyAddedItem[]>([]);
+
+  const [tmdbLoaded, setTmdbLoaded] = useState(false);
+
+  // Fetch TMDB data on mount (cached)
+  useEffect(() => {
+    async function loadTmdbData() {
+      const cachedHero = readFromCache<TmdbMediaItem[]>("home:hero");
+      const cachedMoviesDay = readFromCache<TmdbMovie[]>("home:trending-movies-day");
+      const cachedTvDay = readFromCache<TmdbTvShow[]>("home:trending-tv-day");
+
+      const needsHero = !cachedHero;
+      const needsMovies = !cachedMoviesDay;
+      const needsTv = !cachedTvDay;
+
+      const fetches: Promise<void>[] = [];
+
+      if (needsHero) {
+        fetches.push(
+          fetchTrendingAll("day").then((items) => {
+            const withBackdrops = items
+              .filter((item) => item.backdrop_path)
+              .slice(0, HERO_BACKDROP_ITEMS_LIMIT);
+            setHeroItems(withBackdrops);
+            writeToCache("home:hero", withBackdrops);
+          })
+        );
+      } else {
+        setHeroItems(cachedHero!);
+      }
+
+      if (needsMovies) {
+        fetches.push(
+          fetchTrendingMovies("day").then((movies) => {
+            const sliced = movies.slice(0, CAROUSEL_ITEM_LIMIT);
+            setTrendingMovies(sliced);
+            writeToCache("home:trending-movies-day", sliced);
+          })
+        );
+      } else {
+        setTrendingMovies(cachedMoviesDay!);
+      }
+
+      if (needsTv) {
+        fetches.push(
+          fetchTrendingTv("day").then((shows) => {
+            const sliced = shows.slice(0, CAROUSEL_ITEM_LIMIT);
+            setTrendingTv(sliced);
+            writeToCache("home:trending-tv-day", sliced);
+          })
+        );
+      } else {
+        setTrendingTv(cachedTvDay!);
+      }
+
+      // Anime (cached separately)
+      const cachedAnime = readFromCache<RecentlyAddedItem[]>("home:trending-anime");
+      if (!cachedAnime) {
+        fetches.push(
+          fetch("/api/anilist/trending")
+            .then((res) => res.ok ? res.json() : { items: [] })
+            .then(({ items }: { items: RecentlyAddedItem[] }) => {
+              const sliced = (items ?? []).slice(0, CAROUSEL_ITEM_LIMIT);
+              setTrendingAnime(sliced);
+              writeToCache("home:trending-anime", sliced);
+            })
+            .catch(() => {})
+        );
+      } else {
+        setTrendingAnime(cachedAnime);
+      }
+
+      await Promise.allSettled(fetches);
+      setTmdbLoaded(true);
+    }
+
+    loadTmdbData();
+  }, []);
+
+  // Recently Added — always fresh on mount
+  useEffect(() => {
+    fetch("/api/riven/library?sort=date_desc&limit=15&type=movie&type=show")
+      .then((res) => res.ok ? res.json() : { items: [] })
+      .then(({ items }: { items: RecentlyAddedItem[] }) => {
+        setRecentlyAddedItems(items ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setRecentlyAddedLoaded(true));
+  }, []);
+
+  // Swap trending movies time window
+  const handleMoviesTimeWindowChange = useCallback(
+    async (selected: string) => {
+      const newWindow = selected as TrendingTimeWindow;
+      setTrendingMoviesTimeWindow(newWindow);
+
+      const apiWindow = newWindow === "Today" ? "day" : "week";
+      const cacheKey = `home:trending-movies-${apiWindow}`;
+      const cached = readFromCache<TmdbMovie[]>(cacheKey);
+
+      if (cached) {
+        setTrendingMovies(cached);
+        return;
+      }
+
+      const movies = await fetchTrendingMovies(apiWindow);
+      const sliced = movies.slice(0, CAROUSEL_ITEM_LIMIT);
+      setTrendingMovies(sliced);
+      writeToCache(cacheKey, sliced);
+    },
+    []
+  );
+
+  // Swap trending TV time window
+  const handleTvTimeWindowChange = useCallback(
+    async (selected: string) => {
+      const newWindow = selected as TrendingTimeWindow;
+      setTrendingTvTimeWindow(newWindow);
+
+      const apiWindow = newWindow === "Today" ? "day" : "week";
+      const cacheKey = `home:trending-tv-${apiWindow}`;
+      const cached = readFromCache<TmdbTvShow[]>(cacheKey);
+
+      if (cached) {
+        setTrendingTv(cached);
+        return;
+      }
+
+      const shows = await fetchTrendingTv(apiWindow);
+      const sliced = shows.slice(0, CAROUSEL_ITEM_LIMIT);
+      setTrendingTv(sliced);
+      writeToCache(cacheKey, sliced);
+    },
+    []
+  );
+
   return (
-    <section className="relative z-10 mb-8">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-2xl font-semibold text-foreground font-poppins">
-          My Requests
-        </h3>
+    <div className="relative min-h-screen overflow-x-hidden">
+      {/* Fixed immersive background */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black" />
+        <div className="absolute top-[-20%] left-[-10%] h-[600px] w-[600px] rounded-full bg-primary/5 blur-[120px]" />
+        <div className="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]" />
       </div>
-      <ScrollArea className="w-full pb-6">
-        <div className="flex gap-4 w-max h-fit">
-          {requests.map((req) => {
-            const posterSrc = tmdbPosterUrl(req.posterPath, "medium");
-            return (
-              <div
-                key={`req-${req.tmdbId}`}
-                className="shrink-0 w-36 select-none"
-              >
-                <div className="relative w-full border rounded-md overflow-hidden aspect-[2/3]">
-                  {posterSrc ? (
-                    <OptimizedImage
-                      src={posterSrc}
-                      alt={req.title}
-                      className="w-full h-full object-cover rounded-md shadow-lg"
-                      draggable={false}
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-800 flex items-center justify-center rounded-md">
-                      <span className="text-white/60 text-sm">No Image</span>
-                    </div>
-                  )}
-                  <div
-                    className={`absolute top-2 right-2 text-[10px] text-white px-2 py-0.5 rounded-md backdrop-blur-sm ${STATUS_BADGE_STYLES[req.status] ?? "bg-gray-500/70"}`}
-                  >
-                    {STATUS_LABELS[req.status] ?? req.status}
-                  </div>
-                </div>
-                <div className="px-1">
-                  <div className="mt-2.5 text-sm font-medium text-foreground truncate">
-                    {req.title}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5 capitalize">
-                    {req.mediaType === "tv" ? "TV Show" : "Movie"}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+
+      <div className="relative z-10 flex flex-col gap-10 pb-24 md:gap-12">
+        {/* Hero Carousel */}
+        <div className="w-full px-4 md:px-8">
+          <HeroCarousel items={heroItems} />
         </div>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
-    </section>
+
+        {/* Content carousels */}
+        <div className="mx-auto flex w-full max-w-[2400px] flex-col gap-12 px-6 md:px-12 lg:px-16">
+          {/* Recently Added */}
+          {(recentlyAddedItems.length > 0 || !recentlyAddedLoaded) && (
+            <section className="flex flex-col gap-4">
+              <SectionHeading>Recently Added</SectionHeading>
+              <MediaCarousel>
+                {!recentlyAddedLoaded
+                  ? Array.from({ length: 8 }).map((_, i) => (
+                      <MediaCarouselSlide key={i}>
+                        <PortraitCardSkeleton className="w-36" />
+                      </MediaCarouselSlide>
+                    ))
+                  : recentlyAddedItems.map((item) => (
+                      <MediaCarouselSlide key={`recent-${item.id}`}>
+                        <MediaLink
+                          id={item.id}
+                          mediaType={item.media_type === "tv" ? "tv" : "movie"}
+                          indexer={item.indexer === "tvdb" ? "tvdb" : "tmdb"}
+                        >
+                          <PortraitCard
+                            title={item.title}
+                            subtitle={item.year ? String(item.year) : null}
+                            posterUrl={item.poster_path}
+                            className="w-36"
+                          />
+                        </MediaLink>
+                      </MediaCarouselSlide>
+                    ))}
+              </MediaCarousel>
+            </section>
+          )}
+
+          {/* Trending Movies */}
+          <section className="flex flex-col gap-4">
+            <div className="mb-1 flex items-center justify-between">
+              <SectionHeading>Trending Movies</SectionHeading>
+              <div className="flex items-center gap-3">
+                <TogglePill
+                  options={["Today", "This Week"]}
+                  value={trendingMoviesTimeWindow}
+                  onChange={handleMoviesTimeWindowChange}
+                />
+                <Link href="/lists/trending/movie">
+                  <button className={VIEW_ALL_BUTTON_CLASS}>View All</button>
+                </Link>
+              </div>
+            </div>
+            <MediaCarousel>
+              {!tmdbLoaded
+                ? Array.from({ length: 8 }).map((_, i) => (
+                    <MediaCarouselSlide key={i}>
+                      <PortraitCardSkeleton className="w-36" />
+                    </MediaCarouselSlide>
+                  ))
+                : trendingMovies.map((movie) => (
+                    <MediaCarouselSlide key={`movie-${movie.id}`}>
+                      <MediaLink id={movie.id} mediaType="movie">
+                        <PortraitCard
+                          title={movie.title}
+                          subtitle={getTmdbYear(movie) ?? null}
+                          posterUrl={tmdbPosterUrl(movie.poster_path, "medium")}
+                          className="w-36"
+                        />
+                      </MediaLink>
+                    </MediaCarouselSlide>
+                  ))}
+            </MediaCarousel>
+          </section>
+
+          {/* Trending TV Shows */}
+          <section className="flex flex-col gap-4">
+            <div className="mb-1 flex items-center justify-between">
+              <SectionHeading>Trending TV Shows</SectionHeading>
+              <div className="flex items-center gap-3">
+                <TogglePill
+                  options={["Today", "This Week"]}
+                  value={trendingTvTimeWindow}
+                  onChange={handleTvTimeWindowChange}
+                />
+                <Link href="/lists/trending/tv">
+                  <button className={VIEW_ALL_BUTTON_CLASS}>View All</button>
+                </Link>
+              </div>
+            </div>
+            <MediaCarousel>
+              {!tmdbLoaded
+                ? Array.from({ length: 8 }).map((_, i) => (
+                    <MediaCarouselSlide key={i}>
+                      <PortraitCardSkeleton className="w-36" />
+                    </MediaCarouselSlide>
+                  ))
+                : trendingTv.map((show) => (
+                    <MediaCarouselSlide key={`tv-${show.id}`}>
+                      <MediaLink id={show.id} mediaType="tv">
+                        <PortraitCard
+                          title={show.name}
+                          subtitle={getTmdbYear(show) ?? null}
+                          posterUrl={tmdbPosterUrl(show.poster_path, "medium")}
+                          className="w-36"
+                        />
+                      </MediaLink>
+                    </MediaCarouselSlide>
+                  ))}
+            </MediaCarousel>
+          </section>
+
+          {/* Trending Anime */}
+          <section className="flex flex-col gap-4">
+            <div className="mb-1 flex items-center justify-between">
+              <SectionHeading>Trending Anime</SectionHeading>
+              <Link href="/lists/trending/anime">
+                <button className={VIEW_ALL_BUTTON_CLASS}>View All</button>
+              </Link>
+            </div>
+            <MediaCarousel>
+              {!tmdbLoaded
+                ? Array.from({ length: 8 }).map((_, i) => (
+                    <MediaCarouselSlide key={i}>
+                      <PortraitCardSkeleton className="w-36" />
+                    </MediaCarouselSlide>
+                  ))
+                : trendingAnime.map((anime) => (
+                    <MediaCarouselSlide key={`anime-${anime.id}`}>
+                      <PortraitCard
+                        title={anime.title}
+                        subtitle={anime.year ? String(anime.year) : null}
+                        posterUrl={anime.poster_path}
+                        className="w-36"
+                      />
+                    </MediaCarouselSlide>
+                  ))}
+            </MediaCarousel>
+          </section>
+        </div>
+      </div>
+    </div>
   );
 }

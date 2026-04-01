@@ -33,6 +33,17 @@ async function tmdbFetch<T>(path: string, params?: Record<string, string>): Prom
   return response.json();
 }
 
+export async function fetchTrendingAll(
+  timeWindow: "day" | "week" = "day"
+): Promise<TmdbMediaItem[]> {
+  const data = await tmdbFetch<TmdbPaginatedResponse<TmdbMediaItem>>(
+    `/trending/all/${timeWindow}`
+  );
+  return (data?.results ?? []).filter(
+    (item) => item.media_type === "movie" || item.media_type === "tv"
+  );
+}
+
 export async function fetchTrendingMovies(
   timeWindow: "day" | "week" = "week"
 ): Promise<TmdbMovie[]> {
