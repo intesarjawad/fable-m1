@@ -366,7 +366,7 @@ export function HeroCarousel({ items, className }: HeroCarouselProps) {
   }
 
   return (
-    <div className={cn("relative overflow-hidden", className)}>
+    <div className={cn("border-border/50 relative overflow-hidden rounded-2xl border shadow-2xl", className)}>
       {/* Embla viewport */}
       <div className="overflow-hidden" ref={emblaRef}>
         <div className="flex">

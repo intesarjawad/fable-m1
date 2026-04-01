@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
+import { VibrantAuroraBackground } from "../components/vibrant-aurora-background";
 import {
   authenticateUser,
   isQuickConnectEnabled,
@@ -219,12 +220,22 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
     : "------";
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-background p-4">
-      <div className="flex w-full max-w-sm flex-col items-center">
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-background">
+      <VibrantAuroraBackground amplitude={0.6} blend={0.3} />
+
+      {/* Grain overlay */}
+      <div
+        className="pointer-events-none fixed inset-0 z-10 opacity-[0.025]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+        }}
+      />
+
+      <div className="relative z-20 flex w-full max-w-sm flex-col items-center px-6">
         {/* Branding */}
-        <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-            <Play className="h-5 w-5 fill-primary-foreground text-primary-foreground" />
+        <div className="mb-10 flex flex-col items-center gap-3">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-card/80 backdrop-blur-sm border border-border shadow-lg shadow-black/20">
+            <Play className="h-6 w-6 text-primary fill-primary" />
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
@@ -236,16 +247,22 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
           </div>
         </div>
 
-        {/* Card */}
-        <div className="w-full rounded-lg border border-border bg-card p-6">
+        {/* Glass card */}
+        <div
+          className="w-full rounded-2xl border border-border/60 p-6 backdrop-blur-xl"
+          style={{
+            background: "color-mix(in oklch, var(--card) 60%, transparent)",
+            boxShadow: "0 16px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
+          }}
+        >
           {/* Auth method toggle */}
           {quickConnectAvailable && (
-            <div className="mb-6 flex rounded-lg bg-muted p-1">
+            <div className="mb-6 flex rounded-xl bg-muted/50 border border-border/40 p-1">
               <button
                 onClick={() => setAuthMethod("password")}
-                className={`flex-1 flex items-center justify-center gap-2 rounded-md py-2 text-xs font-medium transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-all duration-200 ${
                   authMethod === "password"
-                    ? "bg-background text-foreground shadow-sm"
+                    ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -254,9 +271,9 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
               </button>
               <button
                 onClick={() => setAuthMethod("quickconnect")}
-                className={`flex-1 flex items-center justify-center gap-2 rounded-md py-2 text-xs font-medium transition-colors ${
+                className={`flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-all duration-200 ${
                   authMethod === "quickconnect"
-                    ? "bg-background text-foreground shadow-sm"
+                    ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -271,7 +288,7 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
               <div className="space-y-1.5">
                 <label
                   htmlFor="username"
-                  className="block text-sm font-medium text-foreground"
+                  className="block text-xs font-medium text-muted-foreground uppercase tracking-wider"
                 >
                   Username
                 </label>
@@ -283,12 +300,13 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
                   onChange={(e) => setUsername(e.target.value)}
                   disabled={isLoading}
                   autoComplete="username"
+                  className="h-11 rounded-xl border-border/60 bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-primary/20"
                 />
               </div>
               <div className="space-y-1.5">
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-foreground"
+                  className="block text-xs font-medium text-muted-foreground uppercase tracking-wider"
                 >
                   Password
                 </label>
@@ -300,11 +318,12 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}
                   autoComplete="current-password"
+                  className="h-11 rounded-xl border-border/60 bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-primary/20"
                 />
               </div>
 
               {error && (
-                <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive-foreground">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -313,7 +332,7 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="mt-2 h-10 w-full"
+                className="h-11 w-full rounded-xl font-semibold"
               >
                 {isLoading ? (
                   <>
@@ -328,7 +347,7 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
           ) : (
             <div className="space-y-4">
               {quickConnectError && (
-                <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive-foreground">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                   <span>{quickConnectError}</span>
                 </div>
@@ -347,7 +366,10 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
                     <ShieldCheck className="h-3.5 w-3.5" />
                     Approve from any signed-in device
                   </div>
-                  <div className="mx-auto w-fit rounded-lg border border-border bg-muted px-8 py-4 font-mono text-3xl font-bold tracking-[0.5em] text-foreground">
+                  <div
+                    className="mx-auto w-fit rounded-xl border border-border/60 bg-muted/30 px-8 py-4 font-mono text-3xl font-bold tracking-[0.5em] text-foreground"
+                    style={{ boxShadow: "0 0 40px rgba(0, 0, 0, 0.2)" }}
+                  >
                     {formattedCode}
                   </div>
                   <p className="text-xs leading-relaxed text-muted-foreground">
@@ -373,7 +395,7 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
         {/* Back link */}
         <button
           onClick={onBack}
-          className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="mt-6 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-3 w-3" />
           Change server

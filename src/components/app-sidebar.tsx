@@ -289,14 +289,12 @@ export function AppSidebar() {
               asChild
             >
               <Link href="/">
-                <div className="text-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <img
-                    src="/assets/logo/icon.svg"
-                    alt="Logo"
-                    className="rounded-lg"
-                    width={32}
-                    height={32}
-                  />
+                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="80 0 352 512" fill="currentColor" className="size-5">
+                    <rect x="192" y="144" width="48" height="280" rx="4" />
+                    <rect x="160" y="240" width="176" height="44" rx="4" />
+                    <path d="M216 144 V132 C216 90 250 64 296 64 L320 64 C328 64 332 68 332 76 L332 96 C332 104 328 108 320 108 L296 108 C274 108 264 120 264 144 L264 144 L216 144Z" />
+                  </svg>
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
                   <span className="font-semibold">

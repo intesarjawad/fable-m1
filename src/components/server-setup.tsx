@@ -1,15 +1,12 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import {
-  Card,
-  CardContent,
   CardDescription,
-  CardFooter,
-  CardHeader,
   CardTitle,
 } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
+import { VibrantAuroraBackground } from "../components/vibrant-aurora-background";
 import { checkServerHealth, setServerUrl } from "../actions";
 import { Loader2, Server, CheckCircle, Globe, Shield } from "lucide-react";
 import axios from "axios";
@@ -133,23 +130,44 @@ export function ServerSetup({ onNext }: ServerSetupProps) {
   if (urlLoading) return;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 w-full">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-            <Server className="h-5 w-5 text-primary-foreground" />
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-background p-4 w-full">
+      <VibrantAuroraBackground amplitude={0.8} blend={0.4} />
+
+      {/* Grain overlay */}
+      <div
+        className="pointer-events-none fixed inset-0 z-10 opacity-[0.025]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
+        }}
+      />
+
+      <div className="relative z-20 flex w-full max-w-md flex-col items-center px-6">
+        {/* Branding */}
+        <div className="mb-10 flex flex-col items-center gap-3">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-card/80 backdrop-blur-sm border border-border shadow-lg shadow-black/20">
+            <Server className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Connect to Jellyfin</CardTitle>
-          <CardDescription>
-            Enter your Jellyfin server URL to get started
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent>
-            <div>
+          <div className="text-center">
+            <CardTitle className="text-2xl">Connect to Jellyfin</CardTitle>
+            <CardDescription className="mt-1">
+              Enter your Jellyfin server URL to get started
+            </CardDescription>
+          </div>
+        </div>
+
+        {/* Glass card */}
+        <div
+          className="w-full rounded-2xl border border-border/60 p-6 backdrop-blur-xl"
+          style={{
+            background: "color-mix(in oklch, var(--card) 60%, transparent)",
+            boxShadow: "0 16px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04)",
+          }}
+        >
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
               <label
                 htmlFor="server-url"
-                className="text-sm font-medium block mb-2"
+                className="block text-xs font-medium text-muted-foreground uppercase tracking-wider"
               >
                 Server URL
               </label>
@@ -160,9 +178,9 @@ export function ServerSetup({ onNext }: ServerSetupProps) {
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 disabled={isLoading}
-                className={`${
+                className={`h-11 rounded-xl border-border/60 bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-primary/20 ${
                   error
-                    ? "border-red-500"
+                    ? "border-destructive"
                     : connectionStatus === "success"
                       ? "border-green-500"
                       : ""
@@ -181,7 +199,7 @@ export function ServerSetup({ onNext }: ServerSetupProps) {
 
               {/* Success State */}
               {connectionStatus === "success" && detectedUrl && (
-                <div className="flex items-center gap-2 mt-2 text-sm text-green-600">
+                <div className="flex items-center gap-2 mt-2 text-sm text-green-500">
                   <CheckCircle className="h-4 w-4" />
                   <span>Connected to {detectedUrl}</span>
                 </div>
@@ -189,10 +207,9 @@ export function ServerSetup({ onNext }: ServerSetupProps) {
 
               {/* Error State */}
               {error && (
-                <p className="text-sm text-red-500 mt-2 flex items-start gap-2">
-                  <span className="text-red-500 mt-0.5">⚠</span>
+                <div className="flex items-center gap-2 mt-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive-foreground">
                   <span>{error}</span>
-                </p>
+                </div>
               )}
 
               {/* Help Text */}
@@ -203,21 +220,20 @@ export function ServerSetup({ onNext }: ServerSetupProps) {
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Examples:{" "}
-                  <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                  <code className="text-xs bg-muted/50 px-1.5 py-0.5 rounded-md">
                     jellyfin.mydomain.com
                   </code>
                   ,{" "}
-                  <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                  <code className="text-xs bg-muted/50 px-1.5 py-0.5 rounded-md">
                     192.168.1.100:8096
                   </code>
                 </p>
               </div>
             </div>
-          </CardContent>
-          <CardFooter>
+
             <Button
               type="submit"
-              className={`w-full mt-4 ${
+              className={`h-11 w-full rounded-xl font-semibold ${
                 connectionStatus === "success"
                   ? "bg-green-600 hover:bg-green-700"
                   : ""
@@ -229,9 +245,9 @@ export function ServerSetup({ onNext }: ServerSetupProps) {
                 <span>{getConnectionMessage()}</span>
               </span>
             </Button>
-          </CardFooter>
-        </form>
-      </Card>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }
