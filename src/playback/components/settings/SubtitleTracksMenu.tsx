@@ -57,10 +57,10 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
   const { playbackState } = manager;
   const { currentItem, currentMediaSource } = playbackState;
   const [subtitleTracks, setSubtitleTracks] = useState<any[]>([]);
-  const [bestOnlineSub, setBestOnlineSub] = useState<SubdlSubtitle | null>(null);
+  const [onlineResults, setOnlineResults] = useState<SubdlSubtitle[]>([]);
   const [onlineSearching, setOnlineSearching] = useState(false);
   const [onlineSearchDone, setOnlineSearchDone] = useState(false);
-  const [loadingOnline, setLoadingOnline] = useState(false);
+  const [loadingOnlineIndex, setLoadingOnlineIndex] = useState<number | null>(null);
   const [subdlAvailable, setSubdlAvailable] = useState(false);
 
   const [subtitleSize, setSubtitleSize] = useState<number>(() => {
@@ -96,18 +96,15 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 
   // Reset when item changes
   useEffect(() => {
-    setBestOnlineSub(null);
+    setOnlineResults([]);
     setOnlineSearchDone(false);
   }, [currentItem?.Id]);
 
-  // Sort Jellyfin tracks: English first
-  const sortedTracks = React.useMemo(() => {
-    return [...subtitleTracks].sort((a, b) => {
-      const aEn = (a.language || "").toLowerCase().startsWith("en");
-      const bEn = (b.language || "").toLowerCase().startsWith("en");
-      if (aEn && !bEn) return -1;
-      if (!aEn && bEn) return 1;
-      return 0;
+  // Filter Jellyfin tracks to English only
+  const englishTracks = React.useMemo(() => {
+    return subtitleTracks.filter((track) => {
+      const lang = (track.language || "").toLowerCase();
+      return lang === "eng" || lang === "en" || lang === "english" || lang === "";
     });
   }, [subtitleTracks]);
 
@@ -154,8 +151,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
         languages: "EN",
       });
 
-      const best = pickBestSubtitle(result.subtitles, episodeNumber);
-      setBestOnlineSub(best);
+      setOnlineResults(result.subtitles.slice(0, 8));
     } catch {
       // Not critical
     } finally {
@@ -165,24 +161,23 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     }
   }, [currentItem, onlineSearching, onlineSearchDone]);
 
-  // Load the online subtitle
-  const handleLoadOnline = async () => {
-    if (!bestOnlineSub) return;
-    setLoadingOnline(true);
+  // Load an online subtitle by index
+  const handleLoadOnline = async (subtitle: SubdlSubtitle, index: number) => {
+    setLoadingOnlineIndex(index);
     try {
       const isEpisode = currentItem?.Type === "Episode";
       const episodeNumber = isEpisode ? (currentItem as any)?.IndexNumber : undefined;
 
       const params = new URLSearchParams({
-        path: bestOnlineSub.url,
-        language: bestOnlineSub.languageCode.toLowerCase() || "eng",
+        path: subtitle.url,
+        language: subtitle.languageCode.toLowerCase() || "eng",
         ...(episodeNumber ? { episode: String(episodeNumber) } : {}),
       });
       await manager.setSubtitleUrl(`/api/subdl/download?${params}`);
     } catch (error) {
       console.error("Failed to load online subtitle:", error);
     } finally {
-      setLoadingOnline(false);
+      setLoadingOnlineIndex(null);
     }
   };
 
@@ -275,8 +270,8 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 
           <DropdownMenuSeparator className="bg-white/10" />
 
-          {/* Jellyfin tracks — sorted with English first */}
-          {sortedTracks.map((track, i) => (
+          {/* Jellyfin tracks — English only */}
+          {englishTracks.map((track, i) => (
             <DropdownMenuRadioItem
               key={i}
               value={String(track.index)}
@@ -291,32 +286,34 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
             <>
               <DropdownMenuSeparator className="bg-white/10" />
 
-              {/* Already found and loaded */}
-              {bestOnlineSub && (
+              {/* Online results list */}
+              {onlineResults.map((subtitle, i) => (
                 <button
+                  key={`online-${i}`}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    handleLoadOnline();
+                    handleLoadOnline(subtitle, i);
                   }}
-                  disabled={loadingOnline}
-                  className={`w-full flex items-center gap-2.5 px-5 py-2.5 transition-colors text-left ${
-                    isOnlineActive
-                      ? "bg-white/15 text-white"
-                      : "text-white/90 hover:bg-white/10"
+                  disabled={loadingOnlineIndex !== null}
+                  className={`w-full flex items-center gap-2.5 px-5 py-2 transition-colors text-left ${
+                    isOnlineActive ? "text-white/90" : "text-white/90 hover:bg-white/10"
                   }`}
                 >
-                  {loadingOnline ? (
-                    <Loader2 size={14} className="animate-spin shrink-0" />
+                  {loadingOnlineIndex === i ? (
+                    <Loader2 size={12} className="animate-spin shrink-0" />
                   ) : (
-                    <Globe size={14} className="shrink-0 text-white/50" />
+                    <Globe size={12} className="shrink-0 text-white/30" />
                   )}
-                  <span className="text-sm flex-1">English (Online)</span>
-                  {isOnlineActive && (
-                    <span className="text-[10px] text-white/50 shrink-0">Active</span>
-                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm truncate">{subtitle.releaseName}</p>
+                    <p className="text-[11px] text-white/40 truncate">
+                      {subtitle.language}
+                      {subtitle.author && subtitle.author !== "none" ? ` \u00b7 ${subtitle.author}` : ""}
+                    </p>
+                  </div>
                 </button>
-              )}
+              ))}
 
               {/* Search button — only shows if not yet searched */}
               {!onlineSearchDone && !onlineSearching && (
@@ -342,7 +339,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
               )}
 
               {/* No results */}
-              {onlineSearchDone && !bestOnlineSub && (
+              {onlineSearchDone && onlineResults.length === 0 && (
                 <div className="px-5 py-2 text-white/30 text-xs">
                   No online subtitles found
                 </div>
@@ -350,7 +347,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
             </>
           )}
 
-          {!subdlAvailable && sortedTracks.length === 0 && (
+          {!subdlAvailable && englishTracks.length === 0 && (
             <div className="px-5 py-2.5 text-white/40 text-sm">
               No subtitles available
             </div>
