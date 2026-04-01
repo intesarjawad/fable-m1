@@ -1,4 +1,3 @@
-import { AuroraBackground } from "@/src/components/aurora-background";
 import { SearchBar } from "@/src/components/search-component";
 import { Settings2 } from "lucide-react";
 import RivenSection from "@/src/components/settings/riven-section";
@@ -10,7 +9,6 @@ import UserPreferenceSection from "@/src/components/settings/user-preference-sec
 export default function SettingsPage() {
   return (
     <div className="relative px-4 pt-20 pb-3 max-w-full overflow-hidden">
-      <AuroraBackground />
       <div className="relative z-10">
         <div className="mb-6">
           <SearchBar />

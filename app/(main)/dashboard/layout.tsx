@@ -1,5 +1,4 @@
 "use client";
-import { AuroraBackground } from "@/src/components/aurora-background";
 import { SearchBar } from "@/src/components/search-component";
 import _ from "lodash";
 import { useEffect, useMemo } from "react";
@@ -44,7 +43,6 @@ export default function DashboardLayout({
   return (
     <div className="relative px-3 sm:px-6 xl:px-8 py-3 max-w-full overflow-hidden">
       {/* Main content with higher z-index */}
-      <AuroraBackground />
       <div className="relative z-10">
         <div className="relative z-1 mb-8">
           <div className="mb-6">

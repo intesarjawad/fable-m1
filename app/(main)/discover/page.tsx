@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { AuroraBackground } from "@/src/components/aurora-background";
 import { SearchBar } from "@/src/components/search-component";
 import { DiscoverHero } from "@/src/components/discover/discover-hero";
 import { GenreFilterBar } from "@/src/components/discover/genre-filter-bar";
@@ -108,7 +107,6 @@ export default function DiscoverPage() {
   if (loading) {
     return (
       <div className="relative px-4 pt-20 pb-3 max-w-full overflow-hidden">
-        <AuroraBackground />
         <div className="relative z-10 mb-8">
           <SearchBar />
         </div>
@@ -124,7 +122,6 @@ export default function DiscoverPage() {
   if (configured === false) {
     return (
       <div className="relative px-4 pt-20 pb-3 max-w-full overflow-hidden">
-        <AuroraBackground />
         <div className="relative z-10 mb-8">
           <SearchBar />
         </div>
@@ -149,8 +146,6 @@ export default function DiscoverPage() {
 
   return (
     <div className="relative max-w-full overflow-hidden">
-      <AuroraBackground />
-
       <div className="relative z-10 px-4 py-3">
         <div className="mb-6">
           <SearchBar />

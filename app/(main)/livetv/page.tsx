@@ -7,7 +7,6 @@ import {
   BaseItemDto,
   ItemSortBy,
 } from "@jellyfin/sdk/lib/generated-client/models";
-import { AuroraBackground } from "@/src/components/aurora-background";
 import { useEffect, useState } from "react";
 import LoadingSpinner from "@/src/components/loading-spinner";
 import ErrorWindow from "@/src/components/error-window";
@@ -53,7 +52,6 @@ export default function LiveTVPage() {
 
   return (
     <div className="relative px-4 py-3 max-w-full overflow-hidden">
-      <AuroraBackground />
       {/* Main content with higher z-index */}
       <div className="relative z-10">
         <div className="relative z-99 mb-8">

@@ -4,7 +4,6 @@ import { getAuthData } from "@/src/actions/utils";
 import { LibraryMediaList } from "@/src/components/library-media-list";
 import { SearchBar } from "@/src/components/search-component";
 import { ScanLibraryButton } from "@/src/components/scan-library-button";
-import { AuroraBackground } from "@/src/components/aurora-background";
 import { useEffect, useState } from "react";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import LoadingSpinner from "@/src/components/loading-spinner";
@@ -76,7 +75,6 @@ export default function LibraryPage() {
 
   return (
     <div className="relative px-4 py-3 max-w-full overflow-hidden">
-      <AuroraBackground />
       {/* Main content with higher z-index */}
       <div className="relative z-10">
         <div className="relative z-99 mb-8">

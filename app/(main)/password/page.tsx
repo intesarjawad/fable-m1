@@ -2,7 +2,6 @@
 import { useState, type SubmitEvent } from "react";
 import { Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { AuroraBackground } from "@/src/components/aurora-background";
 import { Button } from "@/src/components/ui/button";
 import {
   Card,
@@ -84,7 +83,6 @@ export default function PasswordSettingsPage() {
 
   return (
     <div className="relative max-w-full overflow-hidden px-4 py-3">
-      <AuroraBackground />
       <div className="relative z-10 space-y-6">
         <div className="relative z-99 mb-8">
           <div className="mb-6">

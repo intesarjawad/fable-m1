@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
-import { AuroraBackground } from "@/src/components/aurora-background";
 import { Button } from "@/src/components/ui/button";
 import {
   Card,
@@ -117,7 +116,6 @@ export default function QuickConnectPage() {
 
   return (
     <div className="relative max-w-full overflow-hidden px-4 py-3">
-      <AuroraBackground />
       <div className="relative z-99 mb-8">
         <div className="mb-6">
           <SearchBar />

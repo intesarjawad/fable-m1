@@ -1,6 +1,5 @@
 "use client";
 import { getServerUrl, searchItems } from "@/src/actions";
-import { VibrantAuroraBackground } from "@/src/components/vibrant-aurora-background";
 import { MediaCard } from "@/src/components/media-card";
 import { PersonCard } from "@/src/components/person-card";
 import { EpisodeCard } from "@/src/components/episode-card";
@@ -91,8 +90,6 @@ function Search() {
 
   return (
     <div className="relative px-4 pt-20 pb-3 max-w-full">
-      <VibrantAuroraBackground amplitude={0.8} blend={0.4} />
-
       <div className="relative z-99 mb-8">
         <div className="mb-6">
           <SearchBar />
