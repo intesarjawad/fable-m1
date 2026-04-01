@@ -269,6 +269,8 @@ export const SubtitleDisplay: React.FC<SubtitleDisplayProps> = ({
     const loadAllSubtitles = async () => {
       const subtitleMap = new Map<number, SubtitleLine[]>();
 
+      console.log("[SubtitleDisplay] Loading tracks:", textTracks.map(t => `${t.index}:${t.label}`));
+
       for (const track of textTracks) {
         try {
           const response = await fetch(track.src);
@@ -282,12 +284,14 @@ export const SubtitleDisplay: React.FC<SubtitleDisplayProps> = ({
 
           const content = await response.text();
           const parsed = parseVTT(content);
+          console.log(`[SubtitleDisplay] Track ${track.index} (${track.label}): ${parsed.length} cues`);
           subtitleMap.set(track.index, parsed);
         } catch (error) {
           console.error(`Error loading subtitles for ${track.label}:`, error);
         }
       }
 
+      console.log("[SubtitleDisplay] Loaded map keys:", [...subtitleMap.keys()]);
       setAllSubtitles(subtitleMap);
     };
 
@@ -303,6 +307,9 @@ export const SubtitleDisplay: React.FC<SubtitleDisplayProps> = ({
 
     const subtitles = allSubtitles.get(subtitleStreamIndex);
     if (!subtitles || subtitles.length === 0) {
+      if (Math.floor(currentTime) % 5 === 0) {
+        console.log("[SubtitleDisplay] No cues for index", subtitleStreamIndex, "Map keys:", [...allSubtitles.keys()]);
+      }
       setCurrentSubtitle(null);
       return;
     }
