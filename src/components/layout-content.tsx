@@ -50,7 +50,7 @@ function GlobalSearchBar() {
   }
 
   return (
-    <div className="absolute top-0 left-0 right-0 z-50 hidden md:flex items-center justify-center pointer-events-none pt-4 px-4">
+    <div className="sticky top-0 left-0 right-0 z-50 hidden md:flex items-center justify-center pointer-events-none pt-4 pb-8 px-4 bg-gradient-to-b from-black/50 to-transparent">
       <form
         onSubmit={handleSubmit}
         className={`pointer-events-auto relative w-full transition-all duration-200 ${isFocused ? "max-w-xl" : "max-w-lg"}`}

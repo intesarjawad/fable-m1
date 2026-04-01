@@ -340,7 +340,7 @@ export function HeroCarousel({ items, onPlay, className }: HeroCarouselProps) {
             return (
               <div
                 key={item.id}
-                className="relative h-[350px] w-full flex-[0_0_100%] min-w-0 md:h-[420px]"
+                className="relative w-full flex-[0_0_100%] min-w-0 h-[50vh] min-h-[500px] max-h-[800px]"
               >
                 {/* Backdrop image */}
                 {backdropUrl && (
@@ -449,7 +449,7 @@ export function HeroCarousel({ items, onPlay, className }: HeroCarouselProps) {
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
 function HeroCarouselSkeleton() {
   return (
-    <div className="relative h-[350px] w-full overflow-hidden rounded-2xl md:h-[420px]">
+    <div className="relative w-full overflow-hidden rounded-2xl h-[50vh] min-h-[500px] max-h-[800px]">
       <div className="from-background to-muted absolute inset-0 animate-pulse bg-gradient-to-t" />
       <div className="absolute inset-0 z-10 flex flex-col justify-end p-8 md:p-12">
         <div className="w-full max-w-xl">

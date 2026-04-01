@@ -231,8 +231,8 @@ export default function HomePage() {
       </div>
 
       <div className="relative z-10 flex flex-col gap-10 pb-24 md:gap-12">
-        {/* Hero Carousel */}
-        <div className="w-full px-4 md:px-8">
+        {/* Hero Carousel — negative top margin pulls it under the sticky search bar gradient */}
+        <div className="w-full px-4 -mt-[3.5rem] md:px-8">
           <HeroCarousel items={heroItems} />
         </div>
 

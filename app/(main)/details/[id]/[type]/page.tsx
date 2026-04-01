@@ -646,7 +646,7 @@ export default function MediaDetailPage() {
 
                   {/* Action buttons */}
                   <div className="flex gap-2 md:gap-4">
-                    {rivenItem?.state === "Completed" && jellyfinEntry && (
+                    {jellyfinEntry && (
                       <Button
                         variant="secondary"
                         size="sm"
@@ -923,9 +923,8 @@ export default function MediaDetailPage() {
               <SectionHeading title="Cast" />
               <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-none">
                 {castMembers.slice(0, 20).map((member) => (
-                  <a
+                  <div
                     key={member.id}
-                    href={`/person/${member.id}`}
                     className="group shrink-0 opacity-80 transition-opacity duration-300 hover:opacity-100"
                   >
                     <PortraitCard
@@ -938,7 +937,7 @@ export default function MediaDetailPage() {
                       }
                       className="w-32 md:w-36 lg:w-40"
                     />
-                  </a>
+                  </div>
                 ))}
               </div>
             </section>

@@ -55,6 +55,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     targetUrl.searchParams.append("states", state);
   }
 
+  // Log the URL (without the key) for diagnosing connectivity issues
+  const loggableUrl = targetUrl.toString();
+  console.log(`[riven/library] Fetching: ${loggableUrl}`);
+
   try {
     const response = await fetch(targetUrl.toString(), {
       method: "GET",
@@ -69,7 +73,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (!response.ok) {
       const body = await response.text();
       console.error(
-        `Riven library fetch failed: ${response.status} ${response.statusText}`,
+        `[riven/library] Request failed: ${response.status} ${response.statusText} — URL: ${loggableUrl}`,
         body,
       );
       return NextResponse.json(

@@ -11,9 +11,12 @@ export async function GET(): Promise<NextResponse> {
   }
 
   const baseUrl = config.apiUrl.replace(/\/+$/, "");
+  const calendarUrl = `${baseUrl}/api/v1/calendar`;
+
+  console.log(`[riven/calendar] Fetching: ${calendarUrl}`);
 
   try {
-    const response = await fetch(`${baseUrl}/api/v1/calendar`, {
+    const response = await fetch(calendarUrl, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -24,6 +27,11 @@ export async function GET(): Promise<NextResponse> {
     });
 
     if (!response.ok) {
+      const body = await response.text();
+      console.error(
+        `[riven/calendar] Request failed: ${response.status} ${response.statusText} — URL: ${calendarUrl}`,
+        body,
+      );
       return NextResponse.json(
         { success: false, message: `Riven returned ${response.status}` },
         { status: response.status },
