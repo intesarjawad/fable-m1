@@ -12,6 +12,7 @@ interface RivenBackendItem {
   type: string;
   year?: number;
   aired_at?: string;
+  last_state?: string;
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -120,6 +121,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           item.year ??
           (item.aired_at ? new Date(item.aired_at).getFullYear() : "N/A"),
         riven_id: item.id,
+        state: item.last_state ?? null,
       };
     });
 

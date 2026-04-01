@@ -10,6 +10,7 @@ import { HeroCarousel } from "@/src/components/media/hero-carousel";
 import { MediaCarousel, MediaCarouselSlide } from "@/src/components/media/media-carousel";
 import { PortraitCard } from "@/src/components/media/portrait-card";
 import { PortraitCardSkeleton } from "@/src/components/media/portrait-card";
+import { StatusBadge } from "@/src/components/media/status-badge";
 import { TogglePill } from "@/src/components/media/toggle-pill";
 import { MediaLink } from "@/src/components/media/media-link";
 import { tmdbPosterUrl } from "@/src/lib/tmdb";
@@ -66,6 +67,7 @@ interface RecentlyAddedItem {
   media_type: string;
   year?: number | string;
   indexer?: string;
+  state?: string | null;
 }
 
 export default function HomePage() {
@@ -261,6 +263,7 @@ export default function HomePage() {
                             subtitle={item.year ? String(item.year) : null}
                             posterUrl={item.poster_path}
                             className="w-36"
+                            topRight={item.state ? <StatusBadge state={item.state} /> : undefined}
                           />
                         </MediaLink>
                       </MediaCarouselSlide>
