@@ -75,7 +75,7 @@ function GlobalSearchBarInner() {
         onSubmit={handleSubmit}
         className={`pointer-events-auto relative w-full transition-all duration-200 ${isFocused ? "max-w-xl" : "max-w-lg"}`}
       >
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 z-10" />
         <input
           ref={inputRef}
           type="text"
@@ -84,7 +84,7 @@ function GlobalSearchBarInner() {
           onChange={(e) => handleChange(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          className="w-full h-10 pl-10 pr-14 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/30 transition-all"
+          className="w-full h-11 pl-10 pr-14 bg-white/5 backdrop-blur-xl border border-white/5 rounded-full text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/10 focus:bg-black/40 focus:ring-1 focus:ring-white/20 hover:bg-white/10 transition-all duration-300"
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-mono bg-white/5 border border-white/10 rounded px-1.5 py-0.5">
           ⌘K

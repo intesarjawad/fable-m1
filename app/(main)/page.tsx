@@ -233,8 +233,8 @@ export default function HomePage() {
       </div>
 
       <div className="relative z-10 flex flex-col gap-10 pb-24 md:gap-12">
-        {/* Hero Carousel — negative top margin pulls it under the sticky search bar gradient */}
-        <div className="w-full px-4 -mt-[3.5rem] md:px-8">
+        {/* Hero Carousel — no top padding so it sits behind the floating search bar gradient */}
+        <div className="w-full px-4 md:px-8">
           <HeroCarousel items={heroItems} />
         </div>
 
@@ -251,23 +251,26 @@ export default function HomePage() {
                         <PortraitCardSkeleton className="w-36" />
                       </MediaCarouselSlide>
                     ))
-                  : recentlyAddedItems.map((item) => (
-                      <MediaCarouselSlide key={`recent-${item.id}`}>
-                        <MediaLink
-                          id={item.id}
-                          mediaType={item.media_type === "tv" ? "tv" : "movie"}
-                          indexer={item.indexer === "tvdb" ? "tvdb" : "tmdb"}
-                        >
-                          <PortraitCard
-                            title={item.title}
-                            subtitle={item.year ? String(item.year) : null}
-                            posterUrl={item.poster_path}
-                            className="w-36"
-                            topRight={item.state ? <StatusBadge state={item.state} /> : undefined}
-                          />
-                        </MediaLink>
-                      </MediaCarouselSlide>
-                    ))}
+                  : recentlyAddedItems.map((item) => {
+                      const mediaLabel = item.media_type === "tv" ? "TV" : "Movie";
+                      return (
+                        <MediaCarouselSlide key={`recent-${item.id}`}>
+                          <MediaLink
+                            id={item.id}
+                            mediaType={item.media_type === "tv" ? "tv" : "movie"}
+                            indexer={item.indexer === "tvdb" ? "tvdb" : "tmdb"}
+                          >
+                            <PortraitCard
+                              title={item.title}
+                              subtitle={item.year ? `${mediaLabel} \u2022 ${item.year}` : mediaLabel}
+                              posterUrl={item.poster_path}
+                              className="w-36"
+                              topRight={item.state ? <StatusBadge state={item.state} /> : undefined}
+                            />
+                          </MediaLink>
+                        </MediaCarouselSlide>
+                      );
+                    })}
               </MediaCarousel>
             </section>
           )}
@@ -299,7 +302,7 @@ export default function HomePage() {
                       <MediaLink id={movie.id} mediaType="movie">
                         <PortraitCard
                           title={movie.title}
-                          subtitle={getTmdbYear(movie) ?? null}
+                          subtitle={getTmdbYear(movie) ? `Movie \u2022 ${getTmdbYear(movie)}` : "Movie"}
                           posterUrl={tmdbPosterUrl(movie.poster_path, "medium")}
                           className="w-36"
                         />
@@ -336,7 +339,7 @@ export default function HomePage() {
                       <MediaLink id={show.id} mediaType="tv">
                         <PortraitCard
                           title={show.name}
-                          subtitle={getTmdbYear(show) ?? null}
+                          subtitle={getTmdbYear(show) ? `TV \u2022 ${getTmdbYear(show)}` : "TV"}
                           posterUrl={tmdbPosterUrl(show.poster_path, "medium")}
                           className="w-36"
                         />

@@ -99,6 +99,12 @@
   color-scheme: dark;
 }
 
+/* Sidebar active item — icon color only, no background box */
+[data-sidebar="menu-button"][data-active="true"] {
+  background-color: transparent !important;
+  color: var(--sidebar-primary) !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

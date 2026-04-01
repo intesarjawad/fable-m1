@@ -5,10 +5,18 @@ import Autoplay from "embla-carousel-autoplay";
 import { AnimatePresence, motion } from "framer-motion";
 import { Play, Info, Star, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { cn } from "@/src/lib/utils";
 import { tmdbBackdropUrl } from "@/src/lib/tmdb";
 import { Button } from "@/src/components/ui/button";
 import { Skeleton } from "@/src/components/ui/skeleton";
+
+interface RatingScore {
+  name: string;
+  image: string;
+  score: number | string;
+  url: string;
+}
 
 // ─── Genre map (TMDB IDs → display names) ────────────────────────────────────
 const TMDB_GENRE_NAMES: Record<number, string> = {
@@ -63,11 +71,11 @@ export interface HeroCarouselItem {
 interface SlideLogoData {
   logoUrl: string | null;
   certification: string | null;
+  ratings: RatingScore[] | null;
 }
 
 interface HeroCarouselProps {
   items: HeroCarouselItem[];
-  onPlay?: (item: HeroCarouselItem) => void;
   className?: string;
 }
 
@@ -75,7 +83,6 @@ interface HeroCarouselProps {
 interface SlideContentProps {
   item: HeroCarouselItem;
   logoData: SlideLogoData | undefined;
-  onPlay?: (item: HeroCarouselItem) => void;
 }
 
 function extractYear(dateString?: string): string {
@@ -83,7 +90,7 @@ function extractYear(dateString?: string): string {
   return dateString.slice(0, 4);
 }
 
-function SlideContent({ item, logoData, onPlay }: SlideContentProps) {
+function SlideContent({ item, logoData }: SlideContentProps) {
   const isTV = item.media_type === "tv";
   const mediaType = isTV ? "tv" : "movie";
   const displayTitle = item.title ?? item.name ?? "Untitled";
@@ -168,7 +175,32 @@ function SlideContent({ item, logoData, onPlay }: SlideContentProps) {
             </>
           )}
 
-          {item.vote_average != null && item.vote_average > 0 && (
+          {logoData?.ratings && logoData.ratings.length > 0 ? (
+            <div className="ml-2 flex items-center gap-4">
+              {logoData.ratings.map((score) => (
+                <a
+                  key={score.name}
+                  href={score.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 transition-opacity hover:opacity-80"
+                  title={score.name}
+                >
+                  <Image
+                    src={`/rating-logos/${score.image}`}
+                    alt={score.name}
+                    width={16}
+                    height={16}
+                    className="h-4 w-auto object-contain"
+                    unoptimized
+                  />
+                  <span className="text-xs font-bold text-white drop-shadow-md">
+                    {score.score}
+                  </span>
+                </a>
+              ))}
+            </div>
+          ) : item.vote_average != null && item.vote_average > 0 ? (
             <>
               <span className="text-white/40">|</span>
               <span className="flex items-center font-bold text-white drop-shadow-md">
@@ -176,7 +208,7 @@ function SlideContent({ item, logoData, onPlay }: SlideContentProps) {
                 {item.vote_average.toFixed(1)}
               </span>
             </>
-          )}
+          ) : null}
         </motion.div>
 
         {/* Overview */}
@@ -220,16 +252,15 @@ function SlideContent({ item, logoData, onPlay }: SlideContentProps) {
           initial="hidden"
           animate="visible"
         >
-          {onPlay && (
+          <Link href={`/details/${item.id}/${mediaType}`}>
             <Button
-              onClick={() => onPlay(item)}
               size="lg"
-              className="flex h-10 items-center justify-center rounded-md px-8 text-sm font-bold shadow-sm transition-all hover:scale-[1.02] md:h-12 md:text-base"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-10 items-center justify-center rounded-md px-8 text-sm font-bold shadow-sm transition-all hover:scale-[1.02] md:h-12 md:text-base"
             >
               <Play className="mr-2 h-4 w-4" />
               Play Now
             </Button>
-          )}
+          </Link>
           <Link href={`/details/${item.id}/${mediaType}`}>
             <Button
               variant="secondary"
@@ -247,7 +278,7 @@ function SlideContent({ item, logoData, onPlay }: SlideContentProps) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function HeroCarousel({ items, onPlay, className }: HeroCarouselProps) {
+export function HeroCarousel({ items, className }: HeroCarouselProps) {
   const autoplayPlugin = useRef(
     Autoplay({ delay: 5000, stopOnInteraction: false })
   );
@@ -281,22 +312,30 @@ export function HeroCarousel({ items, onPlay, className }: HeroCarouselProps) {
     fetchedItemIds.current.add(item.id);
 
     const mediaType = item.media_type === "tv" ? "tv" : "movie";
-    try {
-      const response = await fetch(`/api/tmdb/logo/${mediaType}/${item.id}`);
-      const data = await response.json();
-      setLogoDataMap((prev) => ({
-        ...prev,
-        [item.id]: {
-          logoUrl: data.logoUrl ?? null,
-          certification: data.certification ?? null,
-        },
-      }));
-    } catch {
-      setLogoDataMap((prev) => ({
-        ...prev,
-        [item.id]: { logoUrl: null, certification: null },
-      }));
-    }
+
+    const [logoResponse, ratingsResponse] = await Promise.allSettled([
+      fetch(`/api/tmdb/logo/${mediaType}/${item.id}`),
+      fetch(`/api/ratings/${item.id}?type=${mediaType}`),
+    ]);
+
+    const logoData =
+      logoResponse.status === "fulfilled" && logoResponse.value.ok
+        ? await logoResponse.value.json().catch(() => ({}))
+        : {};
+
+    const ratingsData =
+      ratingsResponse.status === "fulfilled" && ratingsResponse.value.ok
+        ? await ratingsResponse.value.json().catch(() => ({ scores: null }))
+        : { scores: null };
+
+    setLogoDataMap((prev) => ({
+      ...prev,
+      [item.id]: {
+        logoUrl: logoData.logoUrl ?? null,
+        certification: logoData.certification ?? null,
+        ratings: ratingsData.scores ?? null,
+      },
+    }));
   }, []);
 
   // Prefetch current, next, and previous slides eagerly; rest deferred
@@ -377,7 +416,6 @@ export function HeroCarousel({ items, onPlay, className }: HeroCarouselProps) {
                       <SlideContent
                         item={item}
                         logoData={logoDataMap[item.id]}
-                        onPlay={onPlay}
                       />
                     </motion.div>
                   )}
