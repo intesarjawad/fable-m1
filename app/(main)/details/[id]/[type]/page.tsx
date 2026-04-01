@@ -717,6 +717,27 @@ export default function MediaDetailPage() {
     [selectedRivenSeason, jellyfinEntry],
   );
 
+  const handleEpisodePlay = useCallback(async () => {
+    if (episodeJellyfinId) {
+      router.push(`/player/${episodeJellyfinId}`);
+      return;
+    }
+    if (jellyfinEntry && selectedEpisode) {
+      try {
+        const resolvedId = await findJellyfinEpisodeId(
+          jellyfinEntry.jellyfinId,
+          selectedEpisode.season_number,
+          selectedEpisode.episode_number,
+        );
+        if (resolvedId) {
+          router.push(`/player/${resolvedId}`);
+          return;
+        }
+      } catch { /* fall through */ }
+    }
+    toast.error("Unable to find playback source");
+  }, [episodeJellyfinId, jellyfinEntry, selectedEpisode, router]);
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   if (isLoading) return <DetailPageSkeleton />;
@@ -1184,31 +1205,7 @@ export default function MediaDetailPage() {
           setSelectedEpisode(null);
           setEpisodeJellyfinId(null);
         }}
-        onPlay={
-          episodeSheetRivenEpisode?.state === "Completed"
-            ? async () => {
-                if (episodeJellyfinId) {
-                  router.push(`/player/${episodeJellyfinId}`);
-                  return;
-                }
-                // Try resolving Jellyfin ID on the fly
-                if (jellyfinEntry && selectedEpisode) {
-                  try {
-                    const resolvedId = await findJellyfinEpisodeId(
-                      jellyfinEntry.jellyfinId,
-                      selectedEpisode.season_number,
-                      selectedEpisode.episode_number,
-                    );
-                    if (resolvedId) {
-                      router.push(`/player/${resolvedId}`);
-                      return;
-                    }
-                  } catch { /* fall through */ }
-                }
-                toast.error("Unable to find playback source");
-              }
-            : undefined
-        }
+        onPlay={episodeSheetRivenEpisode?.state === "Completed" ? handleEpisodePlay : undefined}
         isMobile={isMobile}
       />
     </div>
