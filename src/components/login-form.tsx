@@ -8,7 +8,6 @@ import React, {
 } from "react";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { VibrantAuroraBackground } from "../components/vibrant-aurora-background";
 import {
   authenticateUser,
   isQuickConnectEnabled,
@@ -22,7 +21,6 @@ import {
   RefreshCcw,
   AlertCircle,
   ShieldCheck,
-  Play,
   Lock,
   Zap,
 } from "lucide-react";
@@ -220,8 +218,14 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
     : "------";
 
   return (
-    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-background">
-      <VibrantAuroraBackground amplitude={0.6} blend={0.3} />
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-black">
+      {/* Dark Matter ambient glow */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black" />
+        <div className="absolute top-[-15%] left-[20%] h-[500px] w-[500px] rounded-full bg-orange-500/8 blur-[140px]" />
+        <div className="absolute bottom-[-10%] right-[10%] h-[400px] w-[400px] rounded-full bg-amber-600/6 blur-[120px]" />
+        <div className="absolute top-[40%] left-[-5%] h-[300px] w-[300px] rounded-full bg-orange-800/5 blur-[100px]" />
+      </div>
 
       {/* Grain overlay */}
       <div
@@ -234,8 +238,12 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
       <div className="relative z-20 flex w-full max-w-sm flex-col items-center px-6">
         {/* Branding */}
         <div className="mb-10 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-card/80 backdrop-blur-sm border border-border shadow-lg shadow-black/20">
-            <Play className="h-6 w-6 text-primary fill-primary" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-black/20">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="80 0 352 512" fill="currentColor" className="h-7 w-7">
+              <rect x="192" y="144" width="48" height="280" rx="4" />
+              <rect x="160" y="240" width="176" height="44" rx="4" />
+              <path d="M216 144 V132 C216 90 250 64 296 64 L320 64 C328 64 332 68 332 76 L332 96 C332 104 328 108 320 108 L296 108 C274 108 264 120 264 144 L264 144 L216 144Z" />
+            </svg>
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">

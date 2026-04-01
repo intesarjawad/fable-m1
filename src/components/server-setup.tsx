@@ -6,7 +6,6 @@ import {
 } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { VibrantAuroraBackground } from "../components/vibrant-aurora-background";
 import { checkServerHealth, setServerUrl } from "../actions";
 import { Loader2, Server, CheckCircle, Globe, Shield } from "lucide-react";
 import axios from "axios";
@@ -130,8 +129,14 @@ export function ServerSetup({ onNext }: ServerSetupProps) {
   if (urlLoading) return;
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-background p-4 w-full">
-      <VibrantAuroraBackground amplitude={0.8} blend={0.4} />
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black p-4 w-full">
+      {/* Dark Matter ambient glow */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black" />
+        <div className="absolute top-[-15%] left-[20%] h-[500px] w-[500px] rounded-full bg-orange-500/8 blur-[140px]" />
+        <div className="absolute bottom-[-10%] right-[10%] h-[400px] w-[400px] rounded-full bg-amber-600/6 blur-[120px]" />
+        <div className="absolute top-[40%] left-[-5%] h-[300px] w-[300px] rounded-full bg-orange-800/5 blur-[100px]" />
+      </div>
 
       {/* Grain overlay */}
       <div
