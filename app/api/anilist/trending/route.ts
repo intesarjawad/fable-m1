@@ -8,6 +8,10 @@ function buildTrendingQuery(page: number, perPage: number): string {
   return `
 query {
   Page(page: ${page}, perPage: ${perPage}) {
+    pageInfo {
+      hasNextPage
+      total
+    }
     media(type: ANIME, sort: TRENDING_DESC) {
       id
       title {
@@ -98,6 +102,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const rawItems: AnilistMediaItem[] =
       anilistData.data?.Page?.media ?? [];
+    const hasNextPage: boolean =
+      anilistData.data?.Page?.pageInfo?.hasNextPage ?? false;
 
     const normalizedItems: NormalizedAnilistItem[] = rawItems.map((item) => ({
       id: item.id,
@@ -109,7 +115,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       indexer: "anilist",
     }));
 
-    return NextResponse.json({ items: normalizedItems, page });
+    return NextResponse.json({ items: normalizedItems, page, hasNextPage });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Network error";

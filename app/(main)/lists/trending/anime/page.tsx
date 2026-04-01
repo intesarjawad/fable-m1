@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { PortraitCard } from "@/src/components/media/portrait-card";
-import { PortraitCardSkeleton } from "@/src/components/media/portrait-card";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { PortraitCard, PortraitCardSkeleton } from "@/src/components/media/portrait-card";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 
-const SKELETON_COUNT = 20;
+const INITIAL_SKELETON_COUNT = 20;
+const LOAD_MORE_SKELETON_COUNT = 6;
 
 interface NormalizedAnilistItem {
   id: number;
@@ -19,28 +19,99 @@ interface NormalizedAnilistItem {
 
 export default function TrendingAnimePage() {
   const [animeList, setAnimeList] = useState<NormalizedAnilistItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadTrendingAnime() {
-      try {
-        const response = await fetch("/api/anilist/trending?perPage=50");
-        if (!response.ok) {
-          setError("Could not load trending anime.");
-          return;
-        }
-        const data = await response.json();
-        setAnimeList(data.items ?? []);
-      } catch {
-        setError("Could not load trending anime.");
-      } finally {
-        setIsLoading(false);
-      }
-    }
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const isFetchingRef = useRef(false);
 
-    loadTrendingAnime();
+  const fetchPage = useCallback(async (page: number) => {
+    const response = await fetch(`/api/anilist/trending?page=${page}`);
+    if (!response.ok) throw new Error(`AniList returned ${response.status}`);
+    const data = await response.json();
+    return {
+      items: (data.items ?? []) as NormalizedAnilistItem[],
+      hasNextPage: (data.hasNextPage ?? false) as boolean,
+    };
   }, []);
+
+  // Load page 1 on mount
+  useEffect(() => {
+    let cancelled = false;
+    isFetchingRef.current = true;
+
+    fetchPage(1)
+      .then(({ items, hasNextPage: moreAvailable }) => {
+        if (cancelled) return;
+        setAnimeList(items);
+        setCurrentPage(1);
+        setHasNextPage(moreAvailable);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not load trending anime.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsInitialLoading(false);
+          isFetchingRef.current = false;
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchPage]);
+
+  // IntersectionObserver — load next page when sentinel comes into view
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0].isIntersecting) return;
+        if (isFetchingRef.current) return;
+
+        setCurrentPage((prev) => {
+          setHasNextPage((hasMore) => {
+            if (!hasMore) return hasMore;
+
+            const nextPage = prev + 1;
+            isFetchingRef.current = true;
+            setIsFetchingMore(true);
+
+            fetchPage(nextPage)
+              .then(({ items, hasNextPage: moreAvailable }) => {
+                setAnimeList((existing) => {
+                  const seenIds = new Set(existing.map((a) => a.id));
+                  const uniqueItems = items.filter((a) => !seenIds.has(a.id));
+                  return [...existing, ...uniqueItems];
+                });
+                setCurrentPage(nextPage);
+                setHasNextPage(moreAvailable);
+              })
+              .catch(() => {
+                // Page fetch failed — don't advance currentPage so retry is possible
+              })
+              .finally(() => {
+                isFetchingRef.current = false;
+                setIsFetchingMore(false);
+              });
+
+            return hasMore;
+          });
+          return prev;
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [fetchPage]);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
@@ -66,9 +137,9 @@ export default function TrendingAnimePage() {
             Trending Anime
           </h1>
 
-          {!isLoading && !error && (
+          {!isInitialLoading && !error && (
             <p className="text-sm text-muted-foreground">
-              {animeList.length} titles from AniList
+              {animeList.length} titles loaded from AniList
             </p>
           )}
         </div>
@@ -83,8 +154,8 @@ export default function TrendingAnimePage() {
         {/* Grid */}
         {!error && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
-            {isLoading
-              ? Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+            {isInitialLoading
+              ? Array.from({ length: INITIAL_SKELETON_COUNT }).map((_, i) => (
                   <PortraitCardSkeleton key={i} />
                 ))
               : animeList.map((anime) => (
@@ -95,7 +166,28 @@ export default function TrendingAnimePage() {
                     posterUrl={anime.poster_path}
                   />
                 ))}
+
+            {isFetchingMore &&
+              Array.from({ length: LOAD_MORE_SKELETON_COUNT }).map((_, i) => (
+                <PortraitCardSkeleton key={`more-${i}`} />
+              ))}
           </div>
+        )}
+
+        {/* Sentinel div for IntersectionObserver */}
+        <div ref={sentinelRef} className="h-4" />
+
+        {/* Bottom loading indicator */}
+        {isFetchingMore && (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {!isInitialLoading && !isFetchingMore && !hasNextPage && animeList.length > 0 && (
+          <p className="text-center text-sm text-muted-foreground py-4">
+            All {animeList.length} titles loaded
+          </p>
         )}
       </div>
     </div>

@@ -1,48 +1,131 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { fetchTrendingMovies } from "@/src/actions/tmdb";
-import { PortraitCard } from "@/src/components/media/portrait-card";
-import { PortraitCardSkeleton } from "@/src/components/media/portrait-card";
+import { PortraitCard, PortraitCardSkeleton } from "@/src/components/media/portrait-card";
 import { MediaLink } from "@/src/components/media/media-link";
 import { TogglePill } from "@/src/components/media/toggle-pill";
 import { tmdbPosterUrl } from "@/src/lib/tmdb";
 import type { TmdbMovie } from "@/src/types/tmdb";
 import { getTmdbYear } from "@/src/types/tmdb";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 
 type TrendingTimeWindow = "Today" | "This Week";
 
-const SKELETON_COUNT = 20;
+const INITIAL_SKELETON_COUNT = 20;
+const LOAD_MORE_SKELETON_COUNT = 6;
 
 export default function TrendingMoviesPage() {
   const [movies, setMovies] = useState<TmdbMovie[]>([]);
   const [timeWindow, setTimeWindow] = useState<TrendingTimeWindow>("This Week");
-  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
 
-  const loadMovies = useCallback(async (window: TrendingTimeWindow) => {
-    setIsLoading(true);
-    try {
-      const apiWindow = window === "Today" ? "day" : "week";
-      const results = await fetchTrendingMovies(apiWindow);
-      setMovies(results);
-    } catch {
-      setMovies([]);
-    } finally {
-      setIsLoading(false);
-    }
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const activeTimeWindowRef = useRef<TrendingTimeWindow>("This Week");
+  const isFetchingRef = useRef(false);
+
+  const hasMorePages = currentPage < totalPages;
+
+  const fetchPage = useCallback(async (window: TrendingTimeWindow, page: number) => {
+    const apiWindow = window === "Today" ? "day" : "week";
+    const response = await fetch(
+      `/api/tmdb/trending/movie/${apiWindow}?page=${page}`
+    );
+    if (!response.ok) throw new Error(`TMDB returned ${response.status}`);
+    const data = await response.json();
+    return {
+      results: (data.results ?? []) as TmdbMovie[],
+      totalPages: (data.total_pages ?? 1) as number,
+    };
   }, []);
 
+  // Load page 1 whenever the time window changes
   useEffect(() => {
-    loadMovies(timeWindow);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadMovies]);
+    let cancelled = false;
+    activeTimeWindowRef.current = timeWindow;
+    isFetchingRef.current = true;
+    setIsInitialLoading(true);
+    setMovies([]);
+    setCurrentPage(1);
+    setTotalPages(1);
+
+    fetchPage(timeWindow, 1)
+      .then(({ results, totalPages: total }) => {
+        if (cancelled) return;
+        setMovies(results);
+        setCurrentPage(1);
+        setTotalPages(total);
+      })
+      .catch(() => {
+        if (!cancelled) setMovies([]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsInitialLoading(false);
+          isFetchingRef.current = false;
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [timeWindow, fetchPage]);
+
+  // IntersectionObserver — load next page when sentinel comes into view
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0].isIntersecting) return;
+        if (isFetchingRef.current) return;
+
+        setCurrentPage((prev) => {
+          setTotalPages((totalPagesSnapshot) => {
+            if (prev >= totalPagesSnapshot) return totalPagesSnapshot;
+
+            const nextPage = prev + 1;
+            const windowAtTriggerTime = activeTimeWindowRef.current;
+            isFetchingRef.current = true;
+            setIsFetchingMore(true);
+
+            fetchPage(windowAtTriggerTime, nextPage)
+              .then(({ results, totalPages: total }) => {
+                if (activeTimeWindowRef.current !== windowAtTriggerTime) return;
+                setMovies((existing) => {
+                  const seenIds = new Set(existing.map((m) => m.id));
+                  const uniqueResults = results.filter((m) => !seenIds.has(m.id));
+                  return [...existing, ...uniqueResults];
+                });
+                setCurrentPage(nextPage);
+                setTotalPages(total);
+              })
+              .catch(() => {
+                // Page fetch failed — don't advance currentPage so retry is possible
+              })
+              .finally(() => {
+                isFetchingRef.current = false;
+                setIsFetchingMore(false);
+              });
+
+            return totalPagesSnapshot;
+          });
+          return prev;
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [fetchPage]);
 
   const handleTimeWindowChange = (selected: string) => {
-    const newWindow = selected as TrendingTimeWindow;
-    setTimeWindow(newWindow);
-    loadMovies(newWindow);
+    setTimeWindow(selected as TrendingTimeWindow);
   };
 
   return (
@@ -76,17 +159,17 @@ export default function TrendingMoviesPage() {
             />
           </div>
 
-          {!isLoading && (
+          {!isInitialLoading && (
             <p className="text-sm text-muted-foreground">
-              {movies.length} titles
+              {movies.length} titles loaded
             </p>
           )}
         </div>
 
         {/* Grid */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
-          {isLoading
-            ? Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+          {isInitialLoading
+            ? Array.from({ length: INITIAL_SKELETON_COUNT }).map((_, i) => (
                 <PortraitCardSkeleton key={i} />
               ))
             : movies.map((movie) => (
@@ -98,7 +181,28 @@ export default function TrendingMoviesPage() {
                   />
                 </MediaLink>
               ))}
+
+          {isFetchingMore &&
+            Array.from({ length: LOAD_MORE_SKELETON_COUNT }).map((_, i) => (
+              <PortraitCardSkeleton key={`more-${i}`} />
+            ))}
         </div>
+
+        {/* Sentinel div for IntersectionObserver */}
+        <div ref={sentinelRef} className="h-4" />
+
+        {/* Bottom loading indicator */}
+        {isFetchingMore && (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {!isInitialLoading && !isFetchingMore && !hasMorePages && movies.length > 0 && (
+          <p className="text-center text-sm text-muted-foreground py-4">
+            All {movies.length} titles loaded
+          </p>
+        )}
       </div>
     </div>
   );
