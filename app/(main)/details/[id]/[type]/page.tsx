@@ -408,7 +408,7 @@ export default function MediaDetailPage() {
     });
   }, [rawId, indexer]);
 
-  // Fetch TMDB details + Riven item in parallel once we have a TMDB ID
+  // Fetch TMDB details first, then use the correct ID for Riven lookup
   useEffect(() => {
     if (resolvedTmdbId === null) return;
 
@@ -425,16 +425,10 @@ export default function MediaDetailPage() {
       setLoadError(null);
 
       try {
-        const [details, rivenResponse] = await Promise.all([
-          mediaType === "movie"
-            ? fetchMovieDetails(resolvedTmdbId!)
-            : fetchTvDetails(resolvedTmdbId!),
-          fetch(
-            `/api/riven/items/${rivenLookupId}?media_type=${mediaType}`,
-          )
-            .then((r) => (r.ok ? r.json() : null))
-            .catch(() => null),
-        ]);
+        // Step 1: Fetch TMDB details
+        const details = mediaType === "movie"
+          ? await fetchMovieDetails(resolvedTmdbId!)
+          : await fetchTvDetails(resolvedTmdbId!);
 
         if (!details) {
           setLoadError("Could not load details. Check your TMDB configuration.");
@@ -447,7 +441,6 @@ export default function MediaDetailPage() {
           const tvData = details as TmdbTvDetails;
           setTvDetails(tvData);
 
-          // Select first real season (prefer season 1, then first non-specials)
           const firstRealSeason =
             tvData.seasons.find((s) => s.season_number === 1) ??
             tvData.seasons.find((s) => s.season_number > 0) ??
@@ -457,6 +450,30 @@ export default function MediaDetailPage() {
             setSelectedSeasonNumber(firstRealSeason.season_number);
           }
         }
+
+        // Step 2: Determine the correct ID for Riven lookup
+        // For movies: use TMDB ID. For TV: use TVDB ID (Riven indexes TV by TVDB).
+        let rivenId: number | string = resolvedTmdbId!;
+        if (mediaType === "tv") {
+          if (indexer === "tvdb") {
+            // Already have the TVDB ID from the URL
+            rivenId = rawId;
+          } else {
+            // Extract TVDB ID from TMDB external_ids
+            const tvData = details as TmdbTvDetails;
+            const tvdbId = tvData.external_ids?.tvdb_id;
+            if (tvdbId) {
+              rivenId = tvdbId;
+            }
+          }
+        }
+
+        // Step 3: Fetch Riven item state using the correct ID
+        const rivenResponse = await fetch(
+          `/api/riven/items/${rivenId}?media_type=${mediaType}`,
+        )
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
 
         if (rivenResponse?.id) {
           setRivenItem(rivenResponse as RivenMediaItem);
@@ -476,9 +493,7 @@ export default function MediaDetailPage() {
 
     loadData();
     return () => controller.abort();
-    // rivenLookupId is derived from rawId, which changes with params
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedTmdbId, mediaType, rivenLookupId]);
+  }, [resolvedTmdbId, mediaType, rawId, indexer]);
 
   // ─── Ratings loading ──────────────────────────────────────────────────────
 
@@ -715,10 +730,11 @@ export default function MediaDetailPage() {
     );
   }
 
-  // Whether the item exists in Riven (regardless of completion state)
+  // Trust Riven as the source of truth for item state
   const isInRiven = rivenItem !== null;
-  // Whether the item is playable from Jellyfin
-  const isInJellyfin = jellyfinEntry !== undefined;
+  const isCompleted = rivenItem?.state === "Completed" || rivenItem?.state === "PartiallyCompleted";
+  // Jellyfin entry used only for getting the player URL
+  const canPlay = isCompleted || jellyfinEntry !== undefined;
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden">
@@ -777,7 +793,7 @@ export default function MediaDetailPage() {
 
                   {/* Play + Trailer buttons bottom-right */}
                   <div className="flex gap-2 md:gap-4">
-                    {isInJellyfin && (
+                    {canPlay && (
                       <Button
                         variant="secondary"
                         size="sm"
@@ -856,7 +872,7 @@ export default function MediaDetailPage() {
               {/* Consumer action buttons */}
               <div className="flex flex-wrap items-center gap-2">
                 {/* Play -- when in Jellyfin */}
-                {isInJellyfin && (
+                {canPlay && (
                   <Button
                     size="default"
                     onClick={handlePlay}
@@ -868,7 +884,7 @@ export default function MediaDetailPage() {
                 )}
 
                 {/* Request -- when NOT in Jellyfin AND NOT in Riven */}
-                {!isInJellyfin && !isInRiven && (
+                {!canPlay && !isInRiven && (
                   <>
                     {mediaType === "movie" ? (
                       <Button

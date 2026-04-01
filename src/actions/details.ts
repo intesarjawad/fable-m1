@@ -72,7 +72,7 @@ export async function fetchMovieDetails(tmdbId: number): Promise<TmdbMovieDetail
 
 export async function fetchTvDetails(tmdbId: number): Promise<TmdbTvDetails | null> {
   return tmdbFetch<TmdbTvDetails>(`/tv/${tmdbId}`, {
-    append_to_response: "credits,recommendations,similar,videos,content_ratings,images",
+    append_to_response: "credits,recommendations,similar,videos,content_ratings,images,external_ids",
   });
 }
 

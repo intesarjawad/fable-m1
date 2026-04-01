@@ -203,6 +203,13 @@ export interface TmdbTvDetails {
   content_ratings: TmdbContentRatings;
   recommendations: { results: TmdbRecommendationTv[] };
   similar: { results: TmdbSimilarTv[] };
+  external_ids?: {
+    tvdb_id?: number | null;
+    imdb_id?: string | null;
+    freebase_id?: string | null;
+    freebase_mid?: string | null;
+    tvrage_id?: number | null;
+  };
 }
 
 // ─── Riven item shape (extended=true) ────────────────────────────────────────
