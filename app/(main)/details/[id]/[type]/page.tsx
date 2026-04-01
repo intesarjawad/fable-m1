@@ -756,8 +756,20 @@ export default function MediaDetailPage() {
                 )}
               </div>
 
-              {/* Request button (only when not in Riven) */}
-              {!rivenItem && (
+              {/* Play button — when item is in Jellyfin library */}
+              {jellyfinEntry && (
+                <Button
+                  size="default"
+                  onClick={handlePlay}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 px-6 font-bold"
+                >
+                  <Play className="mr-1.5 h-4 w-4 fill-current" />
+                  Play
+                </Button>
+              )}
+
+              {/* Request button — only when NOT in Jellyfin library AND not in Riven */}
+              {!jellyfinEntry && !rivenItem && (
                 <div className="flex flex-wrap items-center gap-2">
                   {mediaType === "movie" ? (
                     <Button
@@ -794,6 +806,11 @@ export default function MediaDetailPage() {
                     </>
                   ) : null}
                 </div>
+              )}
+
+              {/* Status badge — when Riven is tracking this item */}
+              {rivenItem && (
+                <StatusBadge state={rivenItem.state} />
               )}
 
               {/* Metadata line */}
