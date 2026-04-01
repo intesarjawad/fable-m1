@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Buffer } from "buffer";
-import { getAuthData } from "@/src/actions/store/server-actions";
 
 const SUBDL_DL_BASE = "https://dl.subdl.com";
 
 /**
  * Downloads a Subdl subtitle zip, extracts the first subtitle file,
- * returns the raw text to the client, and saves it to Jellyfin so
- * all future users get it without re-downloading from Subdl.
- *
- * Query params:
- *   path     — Subdl download path (e.g. /subtitle/3467329-8390388.zip)
- *   itemId   — Jellyfin media item ID (to save the subtitle to)
- *   language — Subtitle language code (e.g. "eng")
- *   hi       — "true" if hearing impaired
+ * and returns the raw text content.
  */
 export async function GET(request: NextRequest) {
   const subtitlePath = request.nextUrl.searchParams.get("path");
@@ -23,10 +15,6 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   }
-
-  const jellyfinItemId = request.nextUrl.searchParams.get("itemId");
-  const language = request.nextUrl.searchParams.get("language") || "eng";
-  const hearingImpaired = request.nextUrl.searchParams.get("hi") === "true";
 
   const downloadUrl = `${SUBDL_DL_BASE}${subtitlePath}`;
 
@@ -54,19 +42,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Save to Jellyfin in the background (don't block the response)
-    if (jellyfinItemId) {
-      saveSubtitleToJellyfin(
-        jellyfinItemId,
-        extracted.content,
-        extracted.format,
-        language,
-        hearingImpaired
-      ).catch((error) =>
-        console.error("Failed to save subtitle to Jellyfin:", error)
-      );
-    }
-
     return new Response(extracted.content, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
@@ -86,10 +61,6 @@ interface ExtractedSubtitle {
   format: string;
 }
 
-/**
- * Minimal zip extraction — finds the first subtitle file and returns its content + format.
- * Handles stored (no compression) and deflate-compressed entries.
- */
 function extractSubtitleFromZip(buffer: Buffer): ExtractedSubtitle | null {
   let offset = 0;
 
@@ -140,48 +111,4 @@ function extractSubtitleFromZip(buffer: Buffer): ExtractedSubtitle | null {
   }
 
   return null;
-}
-
-/**
- * Upload the subtitle to Jellyfin so it becomes a permanent track on the media item.
- * Future users see it as a regular Jellyfin subtitle — no Subdl dependency.
- */
-async function saveSubtitleToJellyfin(
-  itemId: string,
-  subtitleContent: string,
-  format: string,
-  language: string,
-  hearingImpaired: boolean
-): Promise<void> {
-  const authData = await getAuthData();
-  if (!authData) return;
-
-  const serverUrl = authData.serverUrl;
-  const accessToken = (authData.user as any)?.AccessToken;
-  if (!serverUrl || !accessToken) return;
-
-  const base64Data = Buffer.from(subtitleContent).toString("base64");
-
-  const response = await fetch(
-    `${serverUrl}/Videos/${itemId}/Subtitles`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `MediaBrowser Token="${accessToken}"`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        Language: language,
-        Format: format,
-        IsForced: false,
-        IsHearingImpaired: hearingImpaired,
-        Data: base64Data,
-      }),
-      signal: AbortSignal.timeout(10000),
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Jellyfin subtitle upload failed: ${response.status}`);
-  }
 }
