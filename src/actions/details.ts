@@ -82,3 +82,31 @@ export async function fetchTvSeasonDetails(
 ): Promise<TmdbSeasonDetails | null> {
   return tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}`);
 }
+
+interface TmdbFindResult {
+  tv_results: Array<{ id: number }>;
+  movie_results: Array<{ id: number }>;
+}
+
+/**
+ * Resolves an external TVDB or IMDB ID to a TMDB ID using TMDB's /find endpoint.
+ * Returns null if no match is found.
+ */
+export async function resolveTvdbToTmdb(
+  externalId: number | string,
+  externalSource: "tvdb_id" | "imdb_id" = "tvdb_id"
+): Promise<number | null> {
+  const findResult = await tmdbFetch<TmdbFindResult>(`/find/${externalId}`, {
+    external_source: externalSource,
+  });
+
+  if (!findResult) return null;
+
+  const tvMatch = findResult.tv_results[0];
+  if (tvMatch) return tvMatch.id;
+
+  const movieMatch = findResult.movie_results[0];
+  if (movieMatch) return movieMatch.id;
+
+  return null;
+}

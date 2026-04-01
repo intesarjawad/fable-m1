@@ -1,7 +1,6 @@
 import { ReactNode } from "react";
 import { Mountain } from "lucide-react";
 import { cn } from "@/src/lib/utils";
-import { OptimizedImage } from "@/src/components/optimized-image";
 import { Skeleton } from "@/src/components/ui/skeleton";
 
 interface PortraitCardProps {
@@ -32,9 +31,11 @@ export function PortraitCard({
     >
       {posterUrl ? (
         <>
-          <OptimizedImage
+          <img
             src={posterUrl}
             alt={title}
+            loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover transition-transform duration-700 ease-out will-change-transform group-hover:scale-110"
           />
           {/* Primary gradient for text legibility */}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, Fragment } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Play, X, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ import {
   fetchMovieDetails,
   fetchTvDetails,
   fetchTvSeasonDetails,
+  resolveTvdbToTmdb,
 } from "@/src/actions/details";
 
 import {
@@ -315,10 +316,20 @@ function DetailPageSkeleton() {
 export default function MediaDetailPage() {
   const params = useParams<{ id: string; type: string }>();
   const router = useRouter();
-  const tmdbId = Number(params.id);
+  const searchParams = useSearchParams();
+
+  // params.id may be a TVDB ID when coming from the library page
+  const rawId = Number(params.id);
+  const indexer = searchParams.get("indexer");
   const mediaType = params.type as "movie" | "tv";
 
   const { tmdbMap } = useJellyfinTmdbMap();
+
+  // resolvedTmdbId is null while TVDB resolution is in progress, then set to
+  // the real TMDB ID (which equals rawId when no TVDB resolution is needed).
+  const [resolvedTmdbId, setResolvedTmdbId] = useState<number | null>(
+    indexer === "tvdb" ? null : rawId
+  );
 
   // Core data
   const [movieDetails, setMovieDetails] = useState<TmdbMovieDetails | null>(null);
@@ -347,8 +358,27 @@ export default function MediaDetailPage() {
 
   // ─── Data loading ─────────────────────────────────────────────────────────
 
+  // Resolve TVDB → TMDB when the indexer param says tvdb
   useEffect(() => {
-    if (!tmdbId || isNaN(tmdbId) || (mediaType !== "movie" && mediaType !== "tv")) {
+    if (indexer !== "tvdb") return;
+
+    setIsLoading(true);
+    setLoadError(null);
+
+    resolveTvdbToTmdb(rawId).then((tmdbId) => {
+      if (!tmdbId) {
+        setLoadError("Could not resolve TVDB ID to a TMDB entry.");
+        setIsLoading(false);
+        return;
+      }
+      setResolvedTmdbId(tmdbId);
+    });
+  }, [rawId, indexer]);
+
+  useEffect(() => {
+    if (resolvedTmdbId === null) return;
+
+    if (isNaN(resolvedTmdbId) || (mediaType !== "movie" && mediaType !== "tv")) {
       setLoadError("Invalid media ID or type.");
       setIsLoading(false);
       return;
@@ -362,10 +392,12 @@ export default function MediaDetailPage() {
 
       try {
         const [details, rivenResponse] = await Promise.all([
-          mediaType === "movie" ? fetchMovieDetails(tmdbId) : fetchTvDetails(tmdbId),
-          fetch(`/api/riven/items/${tmdbId}?media_type=${mediaType}`).then(
-            (r) => (r.ok ? r.json() : null)
-          ).catch(() => null),
+          mediaType === "movie"
+            ? fetchMovieDetails(resolvedTmdbId!)
+            : fetchTvDetails(resolvedTmdbId!),
+          fetch(`/api/riven/items/${resolvedTmdbId}?media_type=${mediaType}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
         ]);
 
         if (!details) {
@@ -380,9 +412,10 @@ export default function MediaDetailPage() {
           setTvDetails(tvData);
 
           // Select first real season (season 1 if present, else first available)
-          const firstRealSeason = tvData.seasons.find((s) => s.season_number === 1)
-            ?? tvData.seasons.find((s) => s.season_number > 0)
-            ?? tvData.seasons[0];
+          const firstRealSeason =
+            tvData.seasons.find((s) => s.season_number === 1) ??
+            tvData.seasons.find((s) => s.season_number > 0) ??
+            tvData.seasons[0];
 
           if (firstRealSeason) {
             setSelectedSeasonNumber(firstRealSeason.season_number);
@@ -405,17 +438,17 @@ export default function MediaDetailPage() {
 
     loadData();
     return () => controller.abort();
-  }, [tmdbId, mediaType]);
+  }, [resolvedTmdbId, mediaType]);
 
   // ─── Ratings loading ──────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!tmdbId || isNaN(tmdbId)) return;
+    if (!resolvedTmdbId || isNaN(resolvedTmdbId)) return;
 
     const controller = new AbortController();
     setRatingsLoading(true);
 
-    fetch(`/api/ratings/${tmdbId}?type=${mediaType}`, { signal: controller.signal })
+    fetch(`/api/ratings/${resolvedTmdbId}?type=${mediaType}`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((data: RatingsResponse | null) => {
         setRatingsData(data);
@@ -429,17 +462,17 @@ export default function MediaDetailPage() {
       });
 
     return () => controller.abort();
-  }, [tmdbId, mediaType]);
+  }, [resolvedTmdbId, mediaType]);
 
   // ─── Season episode loading ───────────────────────────────────────────────
 
   useEffect(() => {
-    if (mediaType !== "tv" || !tvDetails || !selectedSeasonNumber) return;
+    if (mediaType !== "tv" || !tvDetails || !selectedSeasonNumber || !resolvedTmdbId) return;
 
     const controller = new AbortController();
     setSeasonEpisodesLoading(true);
 
-    fetchTvSeasonDetails(tmdbId, selectedSeasonNumber)
+    fetchTvSeasonDetails(resolvedTmdbId, selectedSeasonNumber)
       .then((season: TmdbSeasonDetails | null) => {
         if (!controller.signal.aborted) {
           setSeasonEpisodes(season?.episodes ?? []);
@@ -454,7 +487,7 @@ export default function MediaDetailPage() {
       });
 
     return () => controller.abort();
-  }, [tmdbId, mediaType, tvDetails, selectedSeasonNumber]);
+  }, [resolvedTmdbId, mediaType, tvDetails, selectedSeasonNumber]);
 
   // ─── Computed values ──────────────────────────────────────────────────────
 
@@ -512,7 +545,7 @@ export default function MediaDetailPage() {
   const recommendations = movieDetails?.recommendations.results ?? tvDetails?.recommendations.results ?? [];
   const similarItems = movieDetails?.similar.results ?? tvDetails?.similar.results ?? [];
 
-  const jellyfinEntry = tmdbMap.get(tmdbId);
+  const jellyfinEntry = resolvedTmdbId ? tmdbMap.get(resolvedTmdbId) : undefined;
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -522,9 +555,10 @@ export default function MediaDetailPage() {
   }, [jellyfinEntry, router]);
 
   const handleMovieRequest = useCallback(async () => {
+    if (!resolvedTmdbId) return;
     setRequestingMovie(true);
     try {
-      const result = await requestMovie(tmdbId);
+      const result = await requestMovie(resolvedTmdbId);
       if (result.success) {
         toast.success(`${title} requested`);
       } else {
@@ -535,7 +569,7 @@ export default function MediaDetailPage() {
     } finally {
       setRequestingMovie(false);
     }
-  }, [tmdbId, title]);
+  }, [resolvedTmdbId, title]);
 
   const handleEpisodeClick = useCallback((episode: TmdbEpisode) => {
     setSelectedEpisode(episode);
