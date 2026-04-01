@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Fragment } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { Play, X, Download, Loader2 } from "lucide-react";
+import { Play, X, Download, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { tmdbPosterUrl, tmdbBackdropUrl } from "@/src/lib/tmdb";
@@ -394,6 +394,7 @@ export default function MediaDetailPage() {
   const [showTrailer, setShowTrailer] = useState(false);
   const [requestingMovie, setRequestingMovie] = useState(false);
   const [requestingTvShow, setRequestingTvShow] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   // Episode sheet state
   const [selectedEpisode, setSelectedEpisode] = useState<TmdbEpisode | null>(null);
@@ -696,6 +697,28 @@ export default function MediaDetailPage() {
     }
   }, [resolvedTmdbId, title]);
 
+  const handleRetry = useCallback(async () => {
+    if (!rivenItem?.id) return;
+    setRetrying(true);
+    try {
+      const response = await fetch("/api/riven/items/retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [rivenItem.id.toString()] }),
+      });
+      if (response.ok) {
+        toast.success(`${title} queued for retry`);
+      } else {
+        const data = await response.json().catch(() => null);
+        toast.error(data?.error || "Retry failed");
+      }
+    } catch {
+      toast.error("Failed to retry");
+    } finally {
+      setRetrying(false);
+    }
+  }, [rivenItem?.id, title]);
+
   const handleEpisodeClick = useCallback(
     async (episode: TmdbEpisode) => {
       const rivenEp = selectedRivenSeason?.episodes?.find(
@@ -942,6 +965,24 @@ export default function MediaDetailPage() {
                       </Button>
                     )}
                   </>
+                )}
+
+                {/* Retry -- when in Riven but not fully completed */}
+                {isInRiven && !isCompleted && (
+                  <Button
+                    variant="secondary"
+                    size="default"
+                    disabled={retrying}
+                    onClick={handleRetry}
+                    className="border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
+                  >
+                    {retrying ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RotateCcw className="mr-1.5 h-4 w-4" />
+                    )}
+                    Retry
+                  </Button>
                 )}
 
                 {/* Request More -- when IS in Riven AND is TV */}
