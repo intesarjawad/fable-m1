@@ -1,5 +1,4 @@
 "use client";
-import { SearchBar } from "@/src/components/search-component";
 import _ from "lodash";
 import { useEffect, useMemo } from "react";
 import { LoaderPinwheel } from "lucide-react";
@@ -41,14 +40,9 @@ export default function DashboardLayout({
   }, [pathname, router]);
 
   return (
-    <div className="relative px-3 sm:px-6 xl:px-8 py-3 max-w-full overflow-hidden">
+    <div className="relative px-3 sm:px-6 xl:px-8 pt-16 pb-3 max-w-full overflow-hidden">
       {/* Main content with higher z-index */}
       <div className="relative z-10">
-        <div className="relative z-1 mb-8">
-          <div className="mb-6">
-            <SearchBar />
-          </div>
-        </div>
         <div className="flex flex-row mb-10 items-center gap-4">
           <h2 className="text-3xl font-semibold text-foreground font-poppins">
             {_.startCase(route)}

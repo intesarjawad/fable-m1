@@ -16,7 +16,6 @@ import { changeUserPassword } from "@/src/actions";
 import { useAtomValue, useSetAtom } from "jotai";
 import { dashboardLoadingAtom } from "@/src/lib/atoms";
 import { useRouter } from "next/navigation";
-import { SearchBar } from "@/src/components/search-component";
 
 const MIN_PASSWORD_LENGTH = 3;
 
@@ -82,14 +81,8 @@ export default function PasswordSettingsPage() {
   };
 
   return (
-    <div className="relative max-w-full overflow-hidden px-4 py-3">
+    <div className="relative max-w-full overflow-hidden px-4 pt-16 pb-3">
       <div className="relative z-10 space-y-6">
-        <div className="relative z-99 mb-8">
-          <div className="mb-6">
-            <SearchBar />
-          </div>
-        </div>
-
         <div>
           <h2 className="font-poppins text-3xl font-semibold text-foreground">
             Password settings

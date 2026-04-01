@@ -23,7 +23,6 @@ import {
   isQuickConnectEnabled,
 } from "@/src/actions";
 import { useRouter } from "next/navigation";
-import { SearchBar } from "@/src/components/search-component";
 
 const MIN_CODE_LENGTH = 4;
 const MAX_CODE_LENGTH = 8;
@@ -115,13 +114,7 @@ export default function QuickConnectPage() {
   };
 
   return (
-    <div className="relative max-w-full overflow-hidden px-4 py-3">
-      <div className="relative z-99 mb-8">
-        <div className="mb-6">
-          <SearchBar />
-        </div>
-      </div>
-
+    <div className="relative max-w-full overflow-hidden px-4 pt-16 pb-3">
       <div className="relative z-10 space-y-6">
         <div className="space-y-2">
           <h2 className="font-poppins text-3xl font-semibold text-foreground">

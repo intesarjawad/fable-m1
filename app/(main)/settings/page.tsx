@@ -1,4 +1,3 @@
-import { SearchBar } from "@/src/components/search-component";
 import { Settings2 } from "lucide-react";
 import RivenSection from "@/src/components/settings/riven-section";
 import TmdbSection from "@/src/components/settings/tmdb-section";
@@ -10,10 +9,6 @@ export default function SettingsPage() {
   return (
     <div className="relative px-4 pt-20 pb-3 max-w-full overflow-hidden">
       <div className="relative z-10">
-        <div className="mb-6">
-          <SearchBar />
-        </div>
-
         <div className="mb-8">
           <h2 className="text-3xl font-semibold text-foreground mb-2 font-poppins flex items-center gap-2">
             <Settings2 className="h-8 w-8" />

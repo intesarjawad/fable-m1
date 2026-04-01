@@ -1,7 +1,6 @@
 "use client";
 import { fetchMediaDetails, getImageUrl } from "@/src/actions";
 import { MediaActions } from "@/src/components/media-actions";
-import { SearchBar } from "@/src/components/search-component";
 import { VibrantAuroraBackground } from "@/src/components/vibrant-aurora-background";
 import { VibrantLogo } from "@/src/components/vibrant-logo";
 import { TextAnimate } from "@/src/components/magicui/text-animate";
@@ -100,10 +99,6 @@ export default function LiveChannel() {
           ) : null}
         </div>
 
-        {/* Search bar positioned over backdrop */}
-        <div className="absolute top-8 left-0 right-0 z-20 px-6">
-          <SearchBar />
-        </div>
       </div>
 
       {/* Content section */}

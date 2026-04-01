@@ -6,7 +6,6 @@ import {
   getServerUrl,
 } from "@/src/actions";
 import { fetchEpisodes } from "@/src/actions";
-import { SearchBar } from "@/src/components/search-component";
 import { Badge } from "@/src/components/ui/badge";
 import { VibrantAuroraBackground } from "@/src/components/vibrant-aurora-background";
 import { VibrantLogo } from "@/src/components/vibrant-logo";
@@ -113,10 +112,6 @@ export default function SeasonPage() {
           <div className="absolute bottom-0 left-0 right-0 h-32 bg-linear-to-t from-black to-transparent md:rounded-xl" />
         </div>
 
-        {/* Search bar positioned over backdrop */}
-        <div className="absolute top-8 left-0 right-0 z-20 px-6">
-          <SearchBar />
-        </div>
       </div>
 
       {/* Content section */}

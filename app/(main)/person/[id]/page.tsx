@@ -4,7 +4,6 @@ import {
   fetchPersonFilmography,
   getImageUrl,
 } from "@/src/actions";
-import { SearchBar } from "@/src/components/search-component";
 import { VibrantAuroraBackground } from "@/src/components/vibrant-aurora-background";
 import { Calendar, MapPin } from "lucide-react";
 import { ImdbIcon } from "@/src/components/icons/imdb";
@@ -118,16 +117,8 @@ export default function PersonPage() {
         className={`fixed inset-0 z-0 pointer-events-none opacity-30`}
       />
 
-      {/* Backdrop section */}
-      <div className="relative">
-        {/* Search bar positioned over backdrop */}
-        <div className="absolute top-8 left-0 right-0 z-20 px-6">
-          <SearchBar />
-        </div>
-      </div>
-
       {/* Content section */}
-      <div className="relative z-10 mt-32 md:pl-8">
+      <div className="relative z-10 pt-16 md:pl-8">
         <div className="flex flex-col md:flex-row mx-auto">
           {/* Person photo */}
           <div className="w-full md:w-1/3 lg:w-1/4 shrink-0 justify-center flex md:block z-50">

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { SearchBar } from "@/src/components/search-component";
 import { DiscoverHero } from "@/src/components/discover/discover-hero";
 import { GenreFilterBar } from "@/src/components/discover/genre-filter-bar";
 import { DiscoverSections } from "@/src/components/discover/discover-sections";
@@ -106,10 +105,7 @@ export default function DiscoverPage() {
   // Loading state
   if (loading) {
     return (
-      <div className="relative px-4 pt-20 pb-3 max-w-full overflow-hidden">
-        <div className="relative z-10 mb-8">
-          <SearchBar />
-        </div>
+      <div className="relative px-4 pt-16 pb-3 max-w-full overflow-hidden">
         <Skeleton className="h-[50vh] min-h-[300px] w-full rounded-xl" />
         <div className="mt-6">
           <Skeleton className="h-10 w-full rounded-full" />
@@ -121,10 +117,7 @@ export default function DiscoverPage() {
   // TMDB not configured
   if (configured === false) {
     return (
-      <div className="relative px-4 pt-20 pb-3 max-w-full overflow-hidden">
-        <div className="relative z-10 mb-8">
-          <SearchBar />
-        </div>
+      <div className="relative px-4 pt-16 pb-3 max-w-full overflow-hidden">
         <div className="relative z-10 flex flex-col items-center justify-center gap-4 py-24 text-center">
           <Settings2 className="h-12 w-12 text-muted-foreground" />
           <h2 className="text-xl font-semibold text-foreground">
@@ -145,13 +138,7 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div className="relative max-w-full overflow-hidden">
-      <div className="relative z-10 px-4 py-3">
-        <div className="mb-6">
-          <SearchBar />
-        </div>
-      </div>
-
+    <div className="relative max-w-full overflow-hidden pt-16">
       <div className="relative z-10">
         <DiscoverHero
           item={heroItem}
