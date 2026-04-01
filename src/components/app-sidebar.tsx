@@ -290,10 +290,10 @@ export function AppSidebar() {
             >
               <Link href="/">
                 <div className="text-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Image
-                    src={"/assets/logo/icon.png"}
+                  <img
+                    src="/assets/logo/icon.svg"
                     alt="Logo"
-                    className="rounded"
+                    className="rounded-lg"
                     width={32}
                     height={32}
                   />
