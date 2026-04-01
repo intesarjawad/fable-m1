@@ -213,8 +213,8 @@ function EpisodeDetailSheet({
                 unoptimized
               />
               {onPlay && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary shadow-lg">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover:bg-black/50">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary shadow-lg transition-transform group-hover:scale-110">
                     <Play className="h-7 w-7 fill-primary-foreground text-primary-foreground ml-1" />
                   </div>
                 </div>
@@ -1184,7 +1184,31 @@ export default function MediaDetailPage() {
           setSelectedEpisode(null);
           setEpisodeJellyfinId(null);
         }}
-        onPlay={episodeJellyfinId ? () => router.push(`/player/${episodeJellyfinId}`) : undefined}
+        onPlay={
+          episodeSheetRivenEpisode?.state === "Completed"
+            ? async () => {
+                if (episodeJellyfinId) {
+                  router.push(`/player/${episodeJellyfinId}`);
+                  return;
+                }
+                // Try resolving Jellyfin ID on the fly
+                if (jellyfinEntry && selectedEpisode) {
+                  try {
+                    const resolvedId = await findJellyfinEpisodeId(
+                      jellyfinEntry.jellyfinId,
+                      selectedEpisode.season_number,
+                      selectedEpisode.episode_number,
+                    );
+                    if (resolvedId) {
+                      router.push(`/player/${resolvedId}`);
+                      return;
+                    }
+                  } catch { /* fall through */ }
+                }
+                toast.error("Unable to find playback source");
+              }
+            : undefined
+        }
         isMobile={isMobile}
       />
     </div>
