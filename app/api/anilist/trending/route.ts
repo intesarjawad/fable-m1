@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const ANILIST_GRAPHQL_URL = "https://graphql.anilist.co";
+const TMDB_BASE = "https://api.themoviedb.org/3";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -47,12 +48,48 @@ interface AnilistMediaItem {
 }
 
 interface NormalizedAnilistItem {
-  id: number;
+  id: number | string;
   title: string;
   poster_path: string;
   media_type: "tv";
   year: number;
-  indexer: "anilist";
+  indexer: "tmdb" | "anilist";
+  tmdb_id: number | null;
+}
+
+/** Search TMDB for an anime title and return the best TV match */
+async function findTmdbId(
+  title: string,
+  year: number | null,
+  apiKey: string,
+): Promise<number | null> {
+  try {
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      query: title,
+      language: "en-US",
+    });
+    if (year) params.set("first_air_date_year", String(year));
+
+    const response = await fetch(`${TMDB_BASE}/search/tv?${params}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const results = data.results ?? [];
+    if (results.length === 0) return null;
+
+    // Best match: exact title match with the same year, or just the first result
+    const exactMatch = results.find(
+      (r: any) =>
+        r.name?.toLowerCase() === title.toLowerCase() ||
+        r.original_name?.toLowerCase() === title.toLowerCase(),
+    );
+    return (exactMatch?.id ?? results[0].id) as number;
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -65,6 +102,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { status: 400 },
     );
   }
+
+  const tmdbApiKey = process.env.TMDB_API_KEY;
 
   try {
     const response = await fetch(ANILIST_GRAPHQL_URL, {
@@ -105,15 +144,29 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const hasNextPage: boolean =
       anilistData.data?.Page?.pageInfo?.hasNextPage ?? false;
 
-    const normalizedItems: NormalizedAnilistItem[] = rawItems.map((item) => ({
-      id: item.id,
-      title:
-        item.title.english ?? item.title.romaji ?? item.title.native,
-      poster_path: item.coverImage.large,
-      media_type: "tv",
-      year: item.seasonYear,
-      indexer: "anilist",
-    }));
+    // Resolve TMDB IDs in parallel for all items
+    let tmdbIds: (number | null)[] = [];
+    if (tmdbApiKey) {
+      tmdbIds = await Promise.all(
+        rawItems.map((item) => {
+          const searchTitle = item.title.english ?? item.title.romaji;
+          return findTmdbId(searchTitle, item.seasonYear, tmdbApiKey);
+        }),
+      );
+    }
+
+    const normalizedItems: NormalizedAnilistItem[] = rawItems.map((item, i) => {
+      const tmdbId = tmdbIds[i] ?? null;
+      return {
+        id: tmdbId ?? item.id,
+        title: item.title.english ?? item.title.romaji ?? item.title.native,
+        poster_path: item.coverImage.large,
+        media_type: "tv",
+        year: item.seasonYear,
+        indexer: tmdbId ? "tmdb" : "anilist",
+        tmdb_id: tmdbId,
+      };
+    });
 
     return NextResponse.json({ items: normalizedItems, page, hasNextPage });
   } catch (error) {

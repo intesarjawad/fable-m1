@@ -525,16 +525,28 @@ export default function HomePage() {
                       <PortraitCardSkeleton className="w-36" />
                     </MediaCarouselSlide>
                   ))
-                : trendingAnime.map((anime) => (
-                    <MediaCarouselSlide key={`anime-${anime.id}`}>
+                : trendingAnime.map((anime) => {
+                    const hasTmdbId = anime.indexer === "tmdb";
+                    const card = (
                       <PortraitCard
                         title={anime.title}
                         subtitle={anime.year ? String(anime.year) : null}
                         posterUrl={anime.poster_path}
                         className="w-36"
                       />
-                    </MediaCarouselSlide>
-                  ))}
+                    );
+                    return (
+                      <MediaCarouselSlide key={`anime-${anime.id}`}>
+                        {hasTmdbId ? (
+                          <MediaLink id={anime.id} mediaType="tv">
+                            {card}
+                          </MediaLink>
+                        ) : (
+                          card
+                        )}
+                      </MediaCarouselSlide>
+                    );
+                  })}
             </MediaCarousel>
           </section>
 
