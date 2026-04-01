@@ -5,6 +5,7 @@ import type {
   TmdbMovie,
   TmdbTvShow,
   TmdbMediaItem,
+  TmdbSearchResult,
   TmdbPaginatedResponse,
   TmdbGenre,
   TmdbGenreListResponse,
@@ -82,15 +83,20 @@ export async function fetchTopRatedTv(): Promise<TmdbTvShow[]> {
   return data?.results ?? [];
 }
 
-export async function searchTmdb(query: string): Promise<TmdbMediaItem[]> {
+/** Multi-search across movies, TV shows, people, and studios */
+export async function searchTmdb(query: string): Promise<TmdbSearchResult[]> {
   if (!query || query.length < 2) return [];
-  const data = await tmdbFetch<TmdbPaginatedResponse<TmdbMediaItem>>("/search/multi", {
+  const data = await tmdbFetch<TmdbPaginatedResponse<TmdbSearchResult>>("/search/multi", {
     query,
     include_adult: "false",
   });
-  // Filter to movies and TV only (exclude people — Person results also have `name`)
+  // Include all media types: movie, tv, person, company
   return (data?.results ?? []).filter(
-    (item: any) => item.media_type === "movie" || item.media_type === "tv"
+    (item: any) =>
+      item.media_type === "movie" ||
+      item.media_type === "tv" ||
+      item.media_type === "person" ||
+      item.media_type === "company"
   );
 }
 

@@ -35,6 +35,28 @@ export interface TmdbTvShow {
 
 export type TmdbMediaItem = TmdbMovie | TmdbTvShow;
 
+/** Returned by TMDB multi-search for person results */
+export interface TmdbPerson {
+  id: number;
+  name: string;
+  profile_path: string | null;
+  popularity: number;
+  known_for_department: string;
+  media_type: "person";
+}
+
+/** Returned by TMDB multi-search for company/studio results */
+export interface TmdbCompany {
+  id: number;
+  name: string;
+  logo_path: string | null;
+  origin_country: string;
+  media_type: "company";
+}
+
+/** All result types from TMDB multi-search */
+export type TmdbSearchResult = TmdbMediaItem | TmdbPerson | TmdbCompany;
+
 export interface TmdbPaginatedResponse<T> {
   page: number;
   results: T[];
@@ -76,24 +98,56 @@ export interface TrackedRequest {
 }
 
 // Type guards
-export function isTmdbMovie(item: TmdbMediaItem): item is TmdbMovie {
-  return "title" in item;
+
+/** True for movie results (from trending, search, or discover endpoints) */
+export function isTmdbMovie(item: TmdbSearchResult): item is TmdbMovie {
+  // media_type="movie" is definitive when present
+  if ((item as any).media_type === "movie") return true;
+  // When media_type is absent, use structural check: movies have `title`, TV shows have `first_air_date`
+  if (!(item as any).media_type) {
+    return "title" in item && !("first_air_date" in item);
+  }
+  return false;
 }
 
-export function isTmdbTvShow(item: TmdbMediaItem): item is TmdbTvShow {
-  return "name" in item;
+/** True for TV show results */
+export function isTmdbTvShow(item: TmdbSearchResult): item is TmdbTvShow {
+  if ((item as any).media_type === "tv") return true;
+  if (!(item as any).media_type) {
+    return "first_air_date" in item;
+  }
+  return false;
 }
 
-export function getTmdbTitle(item: TmdbMediaItem): string {
-  return isTmdbMovie(item) ? item.title : item.name;
+export function isTmdbPerson(item: TmdbSearchResult): item is TmdbPerson {
+  return (item as any).media_type === "person";
 }
 
-export function getTmdbYear(item: TmdbMediaItem): string | undefined {
-  const date = isTmdbMovie(item) ? item.release_date : item.first_air_date;
-  return date ? date.substring(0, 4) : undefined;
+export function isTmdbCompany(item: TmdbSearchResult): item is TmdbCompany {
+  return (item as any).media_type === "company";
 }
 
-export function getTmdbMediaType(item: TmdbMediaItem): "movie" | "tv" {
-  if (item.media_type) return item.media_type;
-  return isTmdbMovie(item) ? "movie" : "tv";
+export function getTmdbTitle(item: TmdbSearchResult): string {
+  // media_type is the most reliable discriminator when present
+  if ((item as any).media_type === "movie") return (item as TmdbMovie).title;
+  if ((item as any).media_type === "tv") return (item as TmdbTvShow).name;
+  if ((item as any).media_type === "person") return (item as TmdbPerson).name;
+  if ((item as any).media_type === "company") return (item as TmdbCompany).name;
+  // Fallback for items without explicit media_type (e.g. TmdbMovie/TmdbTvShow from trending endpoints)
+  if ("title" in item) return (item as TmdbMovie).title;
+  if ("name" in item) return (item as TmdbTvShow).name;
+  return "";
+}
+
+export function getTmdbYear(item: TmdbSearchResult): string | undefined {
+  if (isTmdbMovie(item)) return item.release_date ? item.release_date.substring(0, 4) : undefined;
+  if (isTmdbTvShow(item)) return item.first_air_date ? item.first_air_date.substring(0, 4) : undefined;
+  return undefined;
+}
+
+export function getTmdbMediaType(item: TmdbSearchResult): "movie" | "tv" | "person" | "company" {
+  if ((item as any).media_type) return (item as any).media_type;
+  if (isTmdbMovie(item)) return "movie";
+  if (isTmdbTvShow(item)) return "tv";
+  return "movie"; // fallback
 }

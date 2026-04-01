@@ -218,7 +218,15 @@ function LibraryInner() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="relative px-4 py-6 min-h-screen max-w-full overflow-hidden">
+    <div className="relative min-h-screen overflow-x-hidden">
+      {/* Immersive background — matches riven library page */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black" />
+        <div className="absolute top-[-20%] left-[-10%] h-[600px] w-[600px] rounded-full bg-primary/5 blur-[120px]" />
+        <div className="absolute right-[-5%] bottom-[-10%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[100px]" />
+      </div>
+
+      <div className="relative z-10 px-4 py-6 max-w-full overflow-hidden">
       <div className="mx-auto w-full max-w-[2000px] space-y-6">
 
         {/* ── Header ── */}
@@ -382,6 +390,7 @@ function LibraryInner() {
           </>
         )}
       </div>
+      </div>
     </div>
   );
 }
@@ -392,10 +401,15 @@ export default function LibraryPage() {
   return (
     <Suspense
       fallback={
-        <div className="relative px-4 py-6 min-h-screen">
-          <div className="mx-auto w-full max-w-[2000px] space-y-6">
-            <div className="h-16 w-64 animate-pulse rounded-xl bg-zinc-900/60" />
-            <LibrarySkeletonGrid />
+        <div className="relative min-h-screen overflow-x-hidden">
+          <div className="pointer-events-none fixed inset-0 z-0">
+            <div className="absolute inset-0 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black" />
+          </div>
+          <div className="relative z-10 px-4 py-6">
+            <div className="mx-auto w-full max-w-[2000px] space-y-6">
+              <div className="h-16 w-64 animate-pulse rounded-xl bg-zinc-900/60" />
+              <LibrarySkeletonGrid />
+            </div>
           </div>
         </div>
       }

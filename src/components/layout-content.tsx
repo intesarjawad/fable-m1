@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { SidebarInset, SidebarProvider } from "../components/ui/sidebar";
 import { AppSidebar } from "../components/app-sidebar";
@@ -9,13 +9,24 @@ interface LayoutContentProps {
   children: React.ReactNode;
 }
 
-function GlobalSearchBar() {
+// Inner component that uses useSearchParams (requires Suspense boundary)
+function GlobalSearchBarInner() {
   const [query, setQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync the input value from the URL whenever the ?query= param changes.
+  // This handles: header navigation, browser back/forward, chip clicks on /explore.
+  // Guard: skip the sync while the user is actively typing in this input.
+  useEffect(() => {
+    const urlQuery = searchParams.get("query") ?? "";
+    if (document.activeElement !== inputRef.current) {
+      setQuery(urlQuery);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -35,22 +46,31 @@ function GlobalSearchBar() {
   function handleChange(value: string) {
     setQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (value.trim().length > 2) {
+    if (value.trim().length > 0) {
       debounceRef.current = setTimeout(() => {
         router.push(`/explore?query=${encodeURIComponent(value.trim())}`);
+      }, 300);
+    } else {
+      debounceRef.current = setTimeout(() => {
+        router.push("/explore");
       }, 300);
     }
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (query.trim()) {
-      router.push(`/explore?query=${encodeURIComponent(query.trim())}`);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const trimmed = query.trim();
+    if (trimmed) {
+      router.push(`/explore?query=${encodeURIComponent(trimmed)}`);
+    } else {
+      router.push("/explore");
     }
   }
 
   return (
-    <div className="sticky top-0 left-0 right-0 z-50 hidden md:flex items-center justify-center pointer-events-none pt-4 pb-8 px-4 bg-gradient-to-b from-black/50 to-transparent">
+    // absolute positioning so the bar overlays the page content, matching riven's header behavior
+    <div className="absolute top-0 left-0 right-0 z-50 hidden md:flex items-center justify-center pointer-events-none pt-4 pb-8 px-4 bg-gradient-to-b from-black/50 to-transparent">
       <form
         onSubmit={handleSubmit}
         className={`pointer-events-auto relative w-full transition-all duration-200 ${isFocused ? "max-w-xl" : "max-w-lg"}`}
@@ -74,6 +94,15 @@ function GlobalSearchBar() {
   );
 }
 
+// Suspense wrapper so useSearchParams doesn't block server rendering
+function GlobalSearchBar() {
+  return (
+    <Suspense fallback={null}>
+      <GlobalSearchBarInner />
+    </Suspense>
+  );
+}
+
 export function LayoutContent({ children }: LayoutContentProps) {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -90,6 +119,7 @@ export function LayoutContent({ children }: LayoutContentProps) {
         <SidebarInset
           className={`flex-1 overflow-hidden transition-all duration-300 ease-in-out md:pl-[calc(var(--sidebar-width-icon)+0.5rem)]`}
         >
+          {/* relative container so the absolute search bar positions correctly */}
           <div className="relative flex-1 overflow-y-auto no-scrollbar">
             <GlobalSearchBar />
             {children}

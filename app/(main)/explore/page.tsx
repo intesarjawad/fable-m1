@@ -15,9 +15,9 @@ import { PortraitCard } from "@/src/components/media/portrait-card";
 import { PortraitCardSkeleton } from "@/src/components/media/portrait-card";
 import { MediaLink } from "@/src/components/media/media-link";
 import { TogglePill } from "@/src/components/media/toggle-pill";
-import { tmdbPosterUrl, tmdbBackdropUrl } from "@/src/lib/tmdb";
+import { tmdbBackdropUrl } from "@/src/lib/tmdb";
 import { Button } from "@/src/components/ui/button";
-import type { TmdbMediaItem } from "@/src/types/tmdb";
+import type { TmdbMediaItem, TmdbSearchResult } from "@/src/types/tmdb";
 import {
   getTmdbTitle,
   getTmdbYear,
@@ -26,7 +26,8 @@ import {
 } from "@/src/types/tmdb";
 import Link from "next/link";
 
-type MediaTypeFilter = "All" | "Movies" | "TV Shows";
+// Riven has All / Movies / TV Shows / People / Studios
+type MediaTypeFilter = "All" | "Movies" | "TV Shows" | "People" | "Studios";
 
 const SKELETON_COUNT = 12;
 const HERO_ROTATION_INTERVAL_MS = 8000;
@@ -38,14 +39,14 @@ function ExplorePageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const initialQuery = searchParams.get("query") ?? "";
+  // activeQuery is always driven by the URL param — never stale
+  const urlQuery = searchParams.get("query") ?? "";
 
-  const [searchQuery, setSearchQuery] = useState(initialQuery);
-  const [activeQuery, setActiveQuery] = useState(initialQuery);
+  const [activeQuery, setActiveQuery] = useState(urlQuery);
   const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilter>("All");
 
-  // Results state
-  const [searchResults, setSearchResults] = useState<TmdbMediaItem[]>([]);
+  // Results state — multi-search returns movies, TV, people, and companies
+  const [searchResults, setSearchResults] = useState<TmdbSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -55,8 +56,11 @@ function ExplorePageInner() {
   const [chipPageIndex, setChipPageIndex] = useState(0);
   const [trendingLoaded, setTrendingLoaded] = useState(false);
 
-  // Infinite scroll sentinel
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  // Sync activeQuery from URL whenever the param changes (handles header search bar,
+  // browser back/forward, suggestion chip clicks that update the URL)
+  useEffect(() => {
+    setActiveQuery(urlQuery);
+  }, [urlQuery]);
 
   // Load trending pool for empty-state hero + suggestion chips
   useEffect(() => {
@@ -103,7 +107,7 @@ function ExplorePageInner() {
     return () => clearInterval(interval);
   }, [activeQuery, trendingPool.length]);
 
-  // Debounced search
+  // Debounced search — fires whenever activeQuery changes
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerSearch = useCallback(async (query: string) => {
@@ -146,21 +150,9 @@ function ExplorePageInner() {
     };
   }, [activeQuery, triggerSearch]);
 
-  // Sync URL query param on search submit
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = searchQuery.trim();
-    setActiveQuery(trimmed);
-
-    const params = new URLSearchParams();
-    if (trimmed) params.set("query", trimmed);
-    router.replace(`/explore${trimmed ? `?${params.toString()}` : ""}`);
-  };
-
+  // Suggestion chip click → update URL (header search bar will also update via URL sync)
   const handleChipClick = (title: string) => {
     const lower = title.toLowerCase();
-    setSearchQuery(lower);
-    setActiveQuery(lower);
     const params = new URLSearchParams({ query: lower });
     router.replace(`/explore?${params.toString()}`);
   };
@@ -173,11 +165,13 @@ function ExplorePageInner() {
   };
 
   // Filter results by media type tab
-  const filteredResults = useMemo(() => {
+  const filteredResults = useMemo<TmdbSearchResult[]>(() => {
     if (mediaTypeFilter === "All") return searchResults;
-    if (mediaTypeFilter === "Movies")
-      return searchResults.filter((item) => isTmdbMovie(item));
-    return searchResults.filter((item) => !isTmdbMovie(item));
+    if (mediaTypeFilter === "Movies") return searchResults.filter((item) => (item as any).media_type === "movie");
+    if (mediaTypeFilter === "TV Shows") return searchResults.filter((item) => (item as any).media_type === "tv");
+    if (mediaTypeFilter === "People") return searchResults.filter((item) => (item as any).media_type === "person");
+    if (mediaTypeFilter === "Studios") return searchResults.filter((item) => (item as any).media_type === "company");
+    return searchResults;
   }, [searchResults, mediaTypeFilter]);
 
   const isEmptyState = !activeQuery;
@@ -245,11 +239,11 @@ function ExplorePageInner() {
               )}
             </div>
 
-            {/* Media type filter tabs (desktop) */}
+            {/* Media type filter tabs (desktop) — shown whenever there is an active query */}
             {activeQuery && (
               <div className="hidden md:block">
                 <TogglePill
-                  options={["All", "Movies", "TV Shows"]}
+                  options={["All", "Movies", "TV Shows", "People", "Studios"]}
                   value={mediaTypeFilter}
                   onChange={(v) => setMediaTypeFilter(v as MediaTypeFilter)}
                 />
@@ -257,36 +251,11 @@ function ExplorePageInner() {
             )}
           </div>
 
-          {/* Search bar */}
-          <form
-            onSubmit={handleSearchSubmit}
-            className="flex w-full max-w-2xl items-center gap-3"
-          >
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.currentTarget.form?.requestSubmit();
-                  }
-                }}
-                placeholder="Search movies, TV shows..."
-                className="h-11 w-full rounded-xl border border-border bg-background/70 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
-            </div>
-            <Button type="submit" size="sm" className="h-11 px-6 rounded-xl font-bold">
-              Search
-            </Button>
-          </form>
-
           {/* Media type filter tabs (mobile) */}
           {activeQuery && (
             <div className="-mx-1 block overflow-x-auto md:hidden">
               <TogglePill
-                options={["All", "Movies", "TV Shows"]}
+                options={["All", "Movies", "TV Shows", "People", "Studios"]}
                 value={mediaTypeFilter}
                 onChange={(v) => setMediaTypeFilter(v as MediaTypeFilter)}
               />
@@ -308,17 +277,12 @@ function ExplorePageInner() {
         ) : showNoResults ? (
           <NoResultsState
             onClear={() => {
-              setSearchQuery("");
-              setActiveQuery("");
               router.replace("/explore");
             }}
           />
         ) : (
           <SearchResultsGrid items={filteredResults} />
         )}
-
-        {/* Infinite scroll sentinel (placeholder — TMDB multi-search is single-page) */}
-        <div ref={sentinelRef} className="h-4" />
       </div>
     </div>
   );
@@ -448,31 +412,55 @@ function EmptyState({
 
 // Grid of search results
 interface SearchResultsGridProps {
-  items: TmdbMediaItem[];
+  items: TmdbSearchResult[];
   isLoading?: boolean;
 }
 
 function SearchResultsGrid({ items, isLoading = false }: SearchResultsGridProps) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
+    <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
       {items.map((item) => {
         const title = getTmdbTitle(item);
         const year = getTmdbYear(item);
         const mediaType = getTmdbMediaType(item);
-        const posterUrl = tmdbPosterUrl(item.poster_path, "medium");
+
+        // Resolve poster — movies/TV use backdrop path, people use profile_path, companies use logo_path
+        const rawImagePath =
+          (item as any).poster_path ??
+          (item as any).profile_path ??
+          (item as any).logo_path ??
+          null;
+        const posterUrl = rawImagePath
+          ? `https://image.tmdb.org/t/p/w342${rawImagePath}`
+          : null;
+
+        // Only movies and TV link to detail pages
+        const isLinkable = mediaType === "movie" || mediaType === "tv";
+
+        const card = (
+          <PortraitCard
+            title={title}
+            subtitle={year ?? null}
+            posterUrl={posterUrl ?? undefined}
+          />
+        );
+
+        if (isLinkable) {
+          return (
+            <MediaLink
+              key={`${mediaType}-${item.id}`}
+              id={item.id}
+              mediaType={mediaType as "movie" | "tv"}
+            >
+              {card}
+            </MediaLink>
+          );
+        }
 
         return (
-          <MediaLink
-            key={`${mediaType}-${item.id}`}
-            id={item.id}
-            mediaType={mediaType}
-          >
-            <PortraitCard
-              title={title}
-              subtitle={year ?? null}
-              posterUrl={posterUrl}
-            />
-          </MediaLink>
+          <div key={`${mediaType}-${item.id}`}>
+            {card}
+          </div>
         );
       })}
 

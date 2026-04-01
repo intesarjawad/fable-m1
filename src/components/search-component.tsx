@@ -25,7 +25,7 @@ import {
   isTmdbMovie,
 } from "@/src/types/tmdb";
 import { tmdbPosterUrl } from "@/src/lib/tmdb";
-import type { TmdbMediaItem, TmdbTvShow } from "@/src/types/tmdb";
+import type { TmdbMediaItem, TmdbSearchResult, TmdbTvShow } from "@/src/types/tmdb";
 
 interface SearchBarProps {
   className?: string;
@@ -34,7 +34,7 @@ interface SearchBarProps {
 export function SearchBar({ className = "" }: SearchBarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [tmdbSuggestions, setTmdbSuggestions] = useState<TmdbMediaItem[]>([]);
+  const [tmdbSuggestions, setTmdbSuggestions] = useState<TmdbSearchResult[]>([]);
   const [requestSheetItem, setRequestSheetItem] = useState<TmdbTvShow | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -198,7 +198,11 @@ export function SearchBar({ className = "" }: SearchBarProps) {
     }
   };
 
-  const handleTmdbItemClick = async (item: TmdbMediaItem) => {
+  const handleTmdbItemClick = async (item: TmdbSearchResult) => {
+    // Only movies and TV shows are requestable — people and companies are informational
+    const mediaType = getTmdbMediaType(item);
+    if (mediaType !== "movie" && mediaType !== "tv") return;
+
     if (isTmdbMovie(item)) {
       const result = await requestMovie(item.id);
       if (result.success) {
@@ -319,8 +323,20 @@ export function SearchBar({ className = "" }: SearchBarProps) {
                 const title = getTmdbTitle(item);
                 const year = getTmdbYear(item);
                 const mediaType = getTmdbMediaType(item);
-                const posterUrl = tmdbPosterUrl(item.poster_path, "small");
-                const tracked = getRequestByTmdbId(item.id);
+                // Resolve image path across all result types
+                const rawImagePath =
+                  (item as any).poster_path ??
+                  (item as any).profile_path ??
+                  (item as any).logo_path ??
+                  null;
+                const posterUrl = rawImagePath ? tmdbPosterUrl(rawImagePath, "small") : null;
+                const tracked = mediaType === "movie" || mediaType === "tv"
+                  ? getRequestByTmdbId(item.id)
+                  : null;
+                const mediaTypeLabel =
+                  mediaType === "movie" ? "Movie" :
+                  mediaType === "tv" ? "TV Show" :
+                  mediaType === "person" ? "Person" : "Studio";
 
                 return (
                   <div
@@ -341,16 +357,16 @@ export function SearchBar({ className = "" }: SearchBarProps) {
                       <p className="text-sm truncate">{title}</p>
                       <p className="text-xs text-muted-foreground">
                         {year ? `${year} · ` : ""}
-                        {mediaType === "movie" ? "Movie" : "TV Show"}
+                        {mediaTypeLabel}
                       </p>
                     </div>
                     {tracked ? (
                       <span className="text-xs text-muted-foreground capitalize">
                         {tracked.status.replace("-", " ")}
                       </span>
-                    ) : (
+                    ) : (mediaType === "movie" || mediaType === "tv") ? (
                       <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
-                    )}
+                    ) : null}
                   </div>
                 );
               })}
