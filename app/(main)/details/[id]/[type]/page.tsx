@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Fragment } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { Play, X, Download, Loader2, RotateCcw } from "lucide-react";
+import { Play, X, Download, Loader2, RotateCcw, ListRestart } from "lucide-react";
 import { toast } from "sonner";
 
 import { tmdbPosterUrl, tmdbBackdropUrl } from "@/src/lib/tmdb";
@@ -395,6 +395,7 @@ export default function MediaDetailPage() {
   const [requestingMovie, setRequestingMovie] = useState(false);
   const [requestingTvShow, setRequestingTvShow] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Episode sheet state
   const [selectedEpisode, setSelectedEpisode] = useState<TmdbEpisode | null>(null);
@@ -719,6 +720,28 @@ export default function MediaDetailPage() {
     }
   }, [rivenItem?.id, title]);
 
+  const handleReset = useCallback(async () => {
+    if (!rivenItem?.id) return;
+    setResetting(true);
+    try {
+      const response = await fetch("/api/riven/items/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [rivenItem.id.toString()] }),
+      });
+      if (response.ok) {
+        toast.success(`${title} reset to initial state`);
+      } else {
+        const data = await response.json().catch(() => null);
+        toast.error(data?.error || "Reset failed");
+      }
+    } catch {
+      toast.error("Failed to reset");
+    } finally {
+      setResetting(false);
+    }
+  }, [rivenItem?.id, title]);
+
   const handleEpisodeClick = useCallback(
     async (episode: TmdbEpisode) => {
       const rivenEp = selectedRivenSeason?.episodes?.find(
@@ -986,6 +1009,24 @@ export default function MediaDetailPage() {
                       <RotateCcw className="mr-1.5 h-4 w-4" />
                     )}
                     Retry
+                  </Button>
+                )}
+
+                {/* Reset -- re-download from scratch */}
+                {isInRiven && (
+                  <Button
+                    variant="secondary"
+                    size="default"
+                    disabled={resetting}
+                    onClick={handleReset}
+                    className="border-muted-foreground/30 text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50 border bg-transparent px-4"
+                  >
+                    {resetting ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <ListRestart className="mr-1.5 h-4 w-4" />
+                    )}
+                    Reset
                   </Button>
                 )}
 
