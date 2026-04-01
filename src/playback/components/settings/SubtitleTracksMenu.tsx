@@ -21,30 +21,24 @@ interface SubtitleTracksMenuProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/**
- * Pick the best subtitle from Subdl results for a specific episode.
- * Prefers: exact episode match > non-HI > first result
- */
 function pickBestSubtitle(
   subtitles: SubdlSubtitle[],
   episodeNumber?: number
 ): SubdlSubtitle | null {
   if (subtitles.length === 0) return null;
 
-  // Filter to non-HI first, fall back to all
   const nonHi = subtitles.filter((s) => !s.hearingImpaired);
   const candidates = nonHi.length > 0 ? nonHi : subtitles;
 
-  // If we have an episode number, try to find one that mentions it
   if (episodeNumber) {
-    const episodePatterns = [
-      `E${String(episodeNumber).padStart(2, "0")}`,
+    const paddedEp = String(episodeNumber).padStart(2, "0");
+    const patterns = [
+      `E${paddedEp}`,
       `E${episodeNumber}`,
       `Episode.${episodeNumber}`,
       `Episode ${episodeNumber}`,
     ];
-
-    for (const pattern of episodePatterns) {
+    for (const pattern of patterns) {
       const match = candidates.find((s) =>
         s.releaseName.toUpperCase().includes(pattern.toUpperCase())
       );
@@ -52,7 +46,6 @@ function pickBestSubtitle(
     }
   }
 
-  // Fall back to first candidate (Subdl sorts by relevance)
   return candidates[0];
 }
 
@@ -68,7 +61,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
   const [onlineSearching, setOnlineSearching] = useState(false);
   const [onlineSearchDone, setOnlineSearchDone] = useState(false);
   const [loadingOnline, setLoadingOnline] = useState(false);
-  const searchedItemIdRef = useRef<string | null>(null);
+  const [subdlAvailable, setSubdlAvailable] = useState(false);
 
   const [subtitleSize, setSubtitleSize] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -96,11 +89,15 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     fetchTracks();
   }, [currentItem?.Id, currentMediaSource?.Id]);
 
+  // Check if Subdl is configured
+  useEffect(() => {
+    isSubdlConfigured().then(setSubdlAvailable).catch(() => {});
+  }, []);
+
   // Reset when item changes
   useEffect(() => {
     setBestOnlineSub(null);
     setOnlineSearchDone(false);
-    searchedItemIdRef.current = null;
   }, [currentItem?.Id]);
 
   // Sort Jellyfin tracks: English first
@@ -114,14 +111,9 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     });
   }, [subtitleTracks]);
 
-  // Subdl search — find the single best subtitle
-  const runSubdlSearch = useCallback(async () => {
-    const itemId = currentItem?.Id;
-    if (!itemId || searchedItemIdRef.current === itemId) return;
-    searchedItemIdRef.current = itemId;
-
-    const available = await isSubdlConfigured().catch(() => false);
-    if (!available) return;
+  // On-demand Subdl search — only fires when user taps "Search online"
+  const handleSearchOnline = useCallback(async () => {
+    if (onlineSearching || onlineSearchDone) return;
 
     setOnlineSearching(true);
     const deadline = setTimeout(() => {
@@ -134,7 +126,6 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
       let imdbId: string | undefined;
       let tmdbId: string | undefined;
 
-      // For episodes, get series IMDB ID
       if (isEpisode) {
         const seriesId = (currentItem as any)?.SeriesId;
         if (seriesId) {
@@ -172,12 +163,7 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
       setOnlineSearching(false);
       setOnlineSearchDone(true);
     }
-  }, [currentItem]);
-
-  // Trigger search when menu opens
-  useEffect(() => {
-    if (open) runSubdlSearch();
-  }, [open, runSubdlSearch]);
+  }, [currentItem, onlineSearching, onlineSearchDone]);
 
   // Load the online subtitle
   const handleLoadOnline = async () => {
@@ -289,46 +275,6 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 
           <DropdownMenuSeparator className="bg-white/10" />
 
-          {/* Online subtitle — single best match */}
-          {onlineSearching && (
-            <div className="flex items-center gap-2.5 px-5 py-2.5 text-white/40">
-              <Loader2 size={14} className="animate-spin" />
-              <span className="text-sm">Finding best match...</span>
-            </div>
-          )}
-
-          {!onlineSearching && bestOnlineSub && (
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleLoadOnline();
-              }}
-              disabled={loadingOnline}
-              className={`w-full flex items-center gap-2.5 px-5 py-2.5 transition-colors text-left ${
-                isOnlineActive
-                  ? "bg-white/15 text-white"
-                  : "text-white/90 hover:bg-white/10"
-              }`}
-            >
-              {loadingOnline ? (
-                <Loader2 size={14} className="animate-spin shrink-0" />
-              ) : (
-                <Globe size={14} className="shrink-0 text-white/50" />
-              )}
-              <div className="flex-1 min-w-0">
-                <span className="text-sm">English (Online)</span>
-              </div>
-              {isOnlineActive && (
-                <span className="text-[10px] text-white/50 shrink-0">Active</span>
-              )}
-            </button>
-          )}
-
-          {(bestOnlineSub || (onlineSearchDone && !bestOnlineSub)) && (
-            <DropdownMenuSeparator className="bg-white/10" />
-          )}
-
           {/* Jellyfin tracks — sorted with English first */}
           {sortedTracks.map((track, i) => (
             <DropdownMenuRadioItem
@@ -340,7 +286,71 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
             </DropdownMenuRadioItem>
           ))}
 
-          {!onlineSearching && sortedTracks.length === 0 && !bestOnlineSub && (
+          {/* Subdl section — on-demand only */}
+          {subdlAvailable && (
+            <>
+              <DropdownMenuSeparator className="bg-white/10" />
+
+              {/* Already found and loaded */}
+              {bestOnlineSub && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleLoadOnline();
+                  }}
+                  disabled={loadingOnline}
+                  className={`w-full flex items-center gap-2.5 px-5 py-2.5 transition-colors text-left ${
+                    isOnlineActive
+                      ? "bg-white/15 text-white"
+                      : "text-white/90 hover:bg-white/10"
+                  }`}
+                >
+                  {loadingOnline ? (
+                    <Loader2 size={14} className="animate-spin shrink-0" />
+                  ) : (
+                    <Globe size={14} className="shrink-0 text-white/50" />
+                  )}
+                  <span className="text-sm flex-1">English (Online)</span>
+                  {isOnlineActive && (
+                    <span className="text-[10px] text-white/50 shrink-0">Active</span>
+                  )}
+                </button>
+              )}
+
+              {/* Search button — only shows if not yet searched */}
+              {!onlineSearchDone && !onlineSearching && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSearchOnline();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-5 py-2.5 text-white/50 hover:text-white/70 hover:bg-white/10 transition-colors text-left"
+                >
+                  <Globe size={14} className="shrink-0" />
+                  <span className="text-sm">Search online</span>
+                </button>
+              )}
+
+              {/* Searching state */}
+              {onlineSearching && (
+                <div className="flex items-center gap-2.5 px-5 py-2.5 text-white/40">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span className="text-sm">Searching...</span>
+                </div>
+              )}
+
+              {/* No results */}
+              {onlineSearchDone && !bestOnlineSub && (
+                <div className="px-5 py-2 text-white/30 text-xs">
+                  No online subtitles found
+                </div>
+              )}
+            </>
+          )}
+
+          {!subdlAvailable && sortedTracks.length === 0 && (
             <div className="px-5 py-2.5 text-white/40 text-sm">
               No subtitles available
             </div>
