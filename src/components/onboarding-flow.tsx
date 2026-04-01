@@ -57,11 +57,7 @@ export function OnboardingFlow() {
   };
 
   const handleLoginSuccess = () => {
-    if (selectedTheme.variant && selectedTheme.variant !== "Auto") {
-      router.push("/");
-    } else {
-      setCurrentStep("theme");
-    }
+    router.push("/");
   };
 
   const handleThemeComplete = () => {
