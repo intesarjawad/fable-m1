@@ -13,6 +13,7 @@ import {
   fetchDiscoverByProvider,
 } from "@/src/actions/tmdb";
 import { fetchResumeItems } from "@/src/actions";
+import { usePlayback } from "@/src/hooks/usePlayback";
 import { HeroCarousel } from "@/src/components/media/hero-carousel";
 import { MediaCarousel, MediaCarouselSlide } from "@/src/components/media/media-carousel";
 import { PortraitCard, PortraitCardSkeleton } from "@/src/components/media/portrait-card";
@@ -125,6 +126,8 @@ const GENRE_CRIME_TV = 80;
 // ---------------------------------------------------------------------------
 
 export default function HomePage() {
+  const { play } = usePlayback();
+
   // Hero — from library cross-referenced with trending
   const [heroItems, setHeroItems] = useState<TmdbMediaItem[]>([]);
 
@@ -324,12 +327,24 @@ export default function HomePage() {
                     ))
                   : resumeItems.map((item) => {
                       const isEpisode = item.Type === "Episode";
+                      const isMovie = item.Type === "Movie";
                       const displayTitle = isEpisode ? (item.SeriesName || item.Name) : item.Name;
                       const subtitle = isEpisode ? item.Name : (item.ProductionYear ? `${item.ProductionYear}` : null);
                       const playedPercent = item.UserData?.PlayedPercentage ?? 0;
+                      const resumeTicks = item.UserData?.PlaybackPositionTicks ?? 0;
                       return (
                         <MediaCarouselSlide key={`resume-${item.Id}`}>
-                          <div className="relative">
+                          <button
+                            className="relative text-left"
+                            onClick={() =>
+                              play({
+                                id: item.Id,
+                                name: displayTitle,
+                                type: isMovie ? "Movie" : "Episode",
+                                resumePositionTicks: resumeTicks,
+                              })
+                            }
+                          >
                             <PortraitCard
                               title={displayTitle}
                               subtitle={subtitle}
@@ -344,7 +359,7 @@ export default function HomePage() {
                                 />
                               </div>
                             )}
-                          </div>
+                          </button>
                         </MediaCarouselSlide>
                       );
                     })}

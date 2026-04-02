@@ -695,7 +695,10 @@ export default function MediaDetailPage() {
   // ─── Actions ──────────────────────────────────────────────────────────────
 
   const handlePlay = useCallback(() => {
-    if (!jellyfinEntry) return;
+    if (!jellyfinEntry) {
+      toast.error("Playback source not found — content may still be syncing to Jellyfin");
+      return;
+    }
     play({
       id: jellyfinEntry.jellyfinId,
       name: title,
