@@ -134,7 +134,9 @@ export function LayoutContent({ children }: LayoutContentProps) {
             <div className="h-20 md:hidden" />
           </div>
         </SidebarInset>
-        <MobileDock />
+        <Suspense fallback={null}>
+          <MobileDock />
+        </Suspense>
       </SidebarProvider>
     </div>
   );
