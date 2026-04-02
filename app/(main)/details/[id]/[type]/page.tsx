@@ -368,7 +368,7 @@ export default function MediaDetailPage() {
   const indexer = searchParams.get("indexer");
   const mediaType = params.type as "movie" | "tv";
 
-  const { tmdbMap } = useJellyfinTmdbMap();
+  const { tmdbMap, tvdbMap } = useJellyfinTmdbMap();
   const { play } = usePlayback();
 
   // For TVDB-indexed URLs, the raw ID is a TVDB ID.
@@ -383,6 +383,9 @@ export default function MediaDetailPage() {
   const [movieDetails, setMovieDetails] = useState<TmdbMovieDetails | null>(null);
   const [tvDetails, setTvDetails] = useState<TmdbTvDetails | null>(null);
   const [rivenItem, setRivenItem] = useState<RivenMediaItem | null>(null);
+  const [resolvedTvdbId, setResolvedTvdbId] = useState<number | null>(
+    indexer === "tvdb" ? rawId : null,
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -484,6 +487,7 @@ export default function MediaDetailPage() {
             const tvdbId = tvData.external_ids?.tvdb_id;
             if (tvdbId) {
               rivenId = tvdbId;
+              setResolvedTvdbId(tvdbId);
             }
           }
         }
@@ -545,7 +549,9 @@ export default function MediaDetailPage() {
 
   // Declared here (rather than in the computed values block below) so the
   // Watchlist effect and callback can reference it without a forward-reference error.
-  const jellyfinEntry = resolvedTmdbId ? tmdbMap.get(resolvedTmdbId) : undefined;
+  const jellyfinEntry =
+    (resolvedTmdbId ? tmdbMap.get(resolvedTmdbId) : undefined) ??
+    (resolvedTvdbId ? tvdbMap.get(resolvedTvdbId) : undefined);
 
   // jellyfinEntry loads asynchronously (tmdbMap populates after mount),
   // so we sync isFavorite whenever it becomes available. The map currently

@@ -1500,7 +1500,7 @@ export async function fetchEpisodeDetails(
 }
 
 export async function fetchAllLibraryTmdbIds(): Promise<
-  { tmdbId: number; jellyfinId: string; type: string }[]
+  { tmdbId: number; tvdbId: number | null; jellyfinId: string; type: string }[]
 > {
   const { serverUrl, user } = await getAuthData();
   if (!user.AccessToken) throw new Error("No access token found");
@@ -1509,7 +1509,7 @@ export async function fetchAllLibraryTmdbIds(): Promise<
   api.accessToken = user.AccessToken;
   const itemsApi = getItemsApi(api);
 
-  const results: { tmdbId: number; jellyfinId: string; type: string }[] = [];
+  const results: { tmdbId: number; tvdbId: number | null; jellyfinId: string; type: string }[] = [];
 
   for (const itemType of ["Movie", "Series"] as const) {
     const response = await itemsApi.getItems({
@@ -1521,12 +1521,20 @@ export async function fetchAllLibraryTmdbIds(): Promise<
     });
 
     for (const item of response.data.Items ?? []) {
+      if (!item.Id) continue;
       const tmdbIdStr = item.ProviderIds?.Tmdb;
-      if (tmdbIdStr && item.Id) {
-        const tmdbId = parseInt(tmdbIdStr, 10);
-        if (!isNaN(tmdbId)) {
-          results.push({ tmdbId, jellyfinId: item.Id, type: itemType });
-        }
+      const tvdbIdStr = item.ProviderIds?.Tvdb;
+      const tmdbId = tmdbIdStr ? parseInt(tmdbIdStr, 10) : NaN;
+      const tvdbId = tvdbIdStr ? parseInt(tvdbIdStr, 10) : NaN;
+
+      // Include item if it has at least one valid ID
+      if (!isNaN(tmdbId) || !isNaN(tvdbId)) {
+        results.push({
+          tmdbId: isNaN(tmdbId) ? 0 : tmdbId,
+          tvdbId: isNaN(tvdbId) ? null : tvdbId,
+          jellyfinId: item.Id,
+          type: itemType,
+        });
       }
     }
   }
