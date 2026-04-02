@@ -538,7 +538,7 @@ export default function HomePage() {
                     return (
                       <MediaCarouselSlide key={`anime-${anime.id}`}>
                         {hasTmdbId ? (
-                          <MediaLink id={anime.id} mediaType="tv">
+                          <MediaLink id={anime.id} mediaType={anime.media_type === "movie" ? "movie" : "tv"}>
                             {card}
                           </MediaLink>
                         ) : (

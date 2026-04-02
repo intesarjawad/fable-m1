@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const ANILIST_GRAPHQL_URL = "https://graphql.anilist.co";
-const TMDB_BASE = "https://api.themoviedb.org/3";
+const ANI_ZIP_BASE = "https://api.ani.zip/v1/mappings";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -51,42 +51,25 @@ interface NormalizedAnilistItem {
   id: number | string;
   title: string;
   poster_path: string;
-  media_type: "tv";
+  media_type: "tv" | "movie";
   year: number;
   indexer: "tmdb" | "anilist";
   tmdb_id: number | null;
 }
 
-/** Search TMDB for an anime title and return the best TV match */
-async function findTmdbId(
-  title: string,
-  year: number | null,
-  apiKey: string,
-): Promise<number | null> {
+/** Resolve AniList ID to TMDB ID via ani.zip mapping service (same as riven-frontend) */
+async function resolveAnilistToTmdb(anilistId: number): Promise<number | null> {
   try {
-    const params = new URLSearchParams({
-      api_key: apiKey,
-      query: title,
-      language: "en-US",
-    });
-    if (year) params.set("first_air_date_year", String(year));
-
-    const response = await fetch(`${TMDB_BASE}/search/tv?${params}`, {
+    const response = await fetch(`${ANI_ZIP_BASE}?anilist_id=${anilistId}`, {
+      headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) return null;
 
     const data = await response.json();
-    const results = data.results ?? [];
-    if (results.length === 0) return null;
-
-    // Best match: exact title match with the same year, or just the first result
-    const exactMatch = results.find(
-      (r: any) =>
-        r.name?.toLowerCase() === title.toLowerCase() ||
-        r.original_name?.toLowerCase() === title.toLowerCase(),
-    );
-    return (exactMatch?.id ?? results[0].id) as number;
+    // ani.zip returns themoviedb_id at root or under mappings
+    const tmdbId = data.themoviedb_id ?? data.mappings?.themoviedb_id;
+    return tmdbId ? Number(tmdbId) : null;
   } catch {
     return null;
   }
@@ -102,8 +85,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { status: 400 },
     );
   }
-
-  const tmdbApiKey = process.env.TMDB_API_KEY;
 
   try {
     const response = await fetch(ANILIST_GRAPHQL_URL, {
@@ -144,24 +125,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const hasNextPage: boolean =
       anilistData.data?.Page?.pageInfo?.hasNextPage ?? false;
 
-    // Resolve TMDB IDs in parallel for all items
-    let tmdbIds: (number | null)[] = [];
-    if (tmdbApiKey) {
-      tmdbIds = await Promise.all(
-        rawItems.map((item) => {
-          const searchTitle = item.title.english ?? item.title.romaji;
-          return findTmdbId(searchTitle, item.seasonYear, tmdbApiKey);
-        }),
-      );
-    }
+    // Resolve TMDB IDs in parallel via ani.zip (same approach as riven-frontend)
+    const tmdbIds = await Promise.all(
+      rawItems.map((item) => resolveAnilistToTmdb(item.id)),
+    );
 
     const normalizedItems: NormalizedAnilistItem[] = rawItems.map((item, i) => {
-      const tmdbId = tmdbIds[i] ?? null;
+      const tmdbId = tmdbIds[i];
+      const isMovie = item.format === "MOVIE";
       return {
         id: tmdbId ?? item.id,
         title: item.title.english ?? item.title.romaji ?? item.title.native,
         poster_path: item.coverImage.large,
-        media_type: "tv",
+        media_type: isMovie ? "movie" : "tv",
         year: item.seasonYear,
         indexer: tmdbId ? "tmdb" : "anilist",
         tmdb_id: tmdbId,
