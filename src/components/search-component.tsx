@@ -10,7 +10,6 @@ import { RequestSheet } from "./request-sheet";
 import * as Kbd from "../components/ui/kbd";
 import { TextShimmer } from "./motion-primitives/text-shimmer";
 import { useAuth } from "../hooks/useAuth";
-import { useRiven } from "@/src/contexts/riven-context";
 import { useJellyfinTmdbMap } from "@/src/hooks/use-jellyfin-tmdb-map";
 import { useRequestState } from "@/src/hooks/use-request-state";
 import { SidebarTrigger } from "../components/ui/sidebar";
@@ -45,7 +44,6 @@ export function SearchBar({ className = "" }: SearchBarProps) {
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { serverUrl } = useAuth();
-  const { isConnected: rivenConnected } = useRiven();
   const { tmdbMap } = useJellyfinTmdbMap();
   const { addRequest, getRequestByTmdbId } = useRequestState();
 
@@ -78,9 +76,7 @@ export function SearchBar({ className = "" }: SearchBarProps) {
 
           // Run Jellyfin and TMDB searches in parallel
           const jellyfinPromise = searchItems(trimmedQuery);
-          const tmdbPromise = rivenConnected
-            ? searchTmdb(trimmedQuery)
-            : Promise.resolve([]);
+          const tmdbPromise = searchTmdb(trimmedQuery);
 
           const [jellyfinResults, tmdbResults] = await Promise.all([
             jellyfinPromise,
@@ -125,7 +121,7 @@ export function SearchBar({ className = "" }: SearchBarProps) {
         clearTimeout(searchTimeout.current);
       }
     };
-  }, [searchQuery, rivenConnected, tmdbMap]);
+  }, [searchQuery, tmdbMap]);
 
   // Global keyboard shortcut for search activation
   useEffect(() => {

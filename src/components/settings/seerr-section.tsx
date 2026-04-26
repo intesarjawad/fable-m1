@@ -27,14 +27,14 @@ import { Button } from "@/src/components/ui/button";
 import { cn } from "@/src/lib/utils";
 import { toast } from "sonner";
 import {
-  testRivenConnection,
-  saveRivenConfig,
-  disconnectRiven,
-  resolveRivenConfig,
-} from "@/src/actions/riven";
+  testSeerrConnection,
+  saveSeerrConfig,
+  disconnectSeerr,
+  resolveSeerrConfig,
+} from "@/src/actions/seerr";
 import { getUser } from "@/src/actions";
 
-export default function RivenSection() {
+export default function SeerrSection() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
@@ -50,8 +50,8 @@ export default function RivenSection() {
     try {
       const [user, config, envResponse] = await Promise.all([
         getUser(),
-        resolveRivenConfig(),
-        fetch("/api/config/riven").then((r) => r.json()),
+        resolveSeerrConfig(),
+        fetch("/api/config/seerr").then((r) => r.json()),
       ]);
 
       const admin = Boolean((user as any)?.Policy?.IsAdministrator);
@@ -64,11 +64,11 @@ export default function RivenSection() {
 
       if (config) {
         setApiUrl(config.apiUrl);
-        const result = await testRivenConnection(config);
+        const result = await testSeerrConnection(config);
         setIsConnected(result.success);
       }
     } catch (error) {
-      console.error("Failed to load Riven settings:", error);
+      console.error("Failed to load Seerr settings:", error);
     } finally {
       setIsLoading(false);
     }
@@ -82,11 +82,11 @@ export default function RivenSection() {
 
   const handleTestAndSave = async () => {
     if (!apiUrl) {
-      toast.error("Enter a Riven API URL");
+      toast.error("Enter a Seerr API URL");
       return;
     }
     if (!apiKey) {
-      toast.error("Enter a Riven API key");
+      toast.error("Enter a Seerr API key");
       return;
     }
 
@@ -95,12 +95,12 @@ export default function RivenSection() {
 
     try {
       const config = { apiUrl, apiKey };
-      const result = await testRivenConnection(config);
+      const result = await testSeerrConnection(config);
 
       if (result.success) {
-        await saveRivenConfig(config);
+        await saveSeerrConfig(config);
         setIsConnected(true);
-        toast.success("Connected to Riven", { id: toastId });
+        toast.success("Connected to Seerr", { id: toastId });
       } else {
         setIsConnected(false);
         toast.error(result.message || "Connection failed", { id: toastId });
@@ -113,15 +113,15 @@ export default function RivenSection() {
   };
 
   const handleDisconnect = async () => {
-    await disconnectRiven();
+    await disconnectSeerr();
     setApiUrl(envApiUrl || "");
     setApiKey("");
     setIsConnected(false);
-    toast.success("Riven configuration cleared");
+    toast.success("Seerr configuration cleared");
 
-    // Re-check if ENV config still connects
+    // If the env-vars still resolve, reflect that as connected.
     if (hasEnvConfig) {
-      const result = await testRivenConnection();
+      const result = await testSeerrConnection();
       setIsConnected(result.success);
     }
   };
@@ -133,7 +133,7 @@ export default function RivenSection() {
           <CardHeader className="flex flex-wrap items-start justify-between gap-3 cursor-pointer">
             <CardTitle className="flex items-center gap-2 font-poppins text-lg">
               <Server className="h-5 w-5" />
-              Riven
+              Seerr
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {!isLoading && isConnected && (
                 <div className="flex items-center gap-1.5 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-medium text-green-500 ring-1 ring-inset ring-green-500/20">
@@ -156,7 +156,7 @@ export default function RivenSection() {
               />
             </button>
             <CardDescription className="w-full">
-              Connect to your Riven instance for media library management.
+              Connect to your Seerr instance to issue requests and surface availability.
             </CardDescription>
           </CardHeader>
         </CollapsibleTrigger>
@@ -176,12 +176,12 @@ export default function RivenSection() {
                     </div>
                     <div className="flex-1">
                       <h4 className="text-sm font-medium text-foreground">
-                        Connected to Riven
+                        Connected to Seerr
                       </h4>
                       <p className="text-xs text-muted-foreground break-all">
-                        {apiUrl}
+                        {apiUrl || envApiUrl}
                       </p>
-                      {hasEnvConfig && (
+                      {hasEnvConfig && !apiUrl && (
                         <p className="text-xs text-muted-foreground/60 mt-0.5">
                           Configured via environment
                         </p>
@@ -208,12 +208,12 @@ export default function RivenSection() {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="riven-url">API URL</Label>
+                  <Label htmlFor="seerr-url">API URL</Label>
                   <div className="relative">
                     <Server className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      id="riven-url"
-                      placeholder={envApiUrl || "http://riven:8080"}
+                      id="seerr-url"
+                      placeholder={envApiUrl || "https://seerr.example.com/api/v1"}
                       className="pl-9 bg-background/50"
                       value={apiUrl}
                       onChange={(e) => setApiUrl(e.target.value)}
@@ -222,13 +222,13 @@ export default function RivenSection() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="riven-key">API Key</Label>
+                  <Label htmlFor="seerr-key">API Key</Label>
                   <div className="relative">
                     <Key className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      id="riven-key"
+                      id="seerr-key"
                       type="password"
-                      placeholder="Your Riven API key"
+                      placeholder="Your Seerr API key"
                       className="pl-9 bg-background/50"
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}

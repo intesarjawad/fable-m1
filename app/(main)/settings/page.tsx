@@ -1,5 +1,5 @@
 import { Settings2 } from "lucide-react";
-import RivenSection from "@/src/components/settings/riven-section";
+import SeerrSection from "@/src/components/settings/seerr-section";
 import TmdbSection from "@/src/components/settings/tmdb-section";
 import ProfileSection from "@/src/components/settings/profile-section";
 import ThemeSection from "@/src/components/settings/theme-section";
@@ -21,7 +21,7 @@ export default function SettingsPage() {
 
         <div className="grid gap-6">
           <ProfileSection />
-          <RivenSection />
+          <SeerrSection />
           <TmdbSection />
           <UserPreferenceSection />
           <ThemeSection />

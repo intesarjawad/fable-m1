@@ -17,7 +17,7 @@ interface LibraryItem {
   media_type: string;
   year: number | string;
   indexer: "tmdb" | "tvdb" | string;
-  riven_id: number | string;
+  jellyfin_id: string;
   state: string | null;
 }
 
@@ -142,7 +142,7 @@ function LibraryInner() {
       }
 
       try {
-        const response = await fetch(`/api/riven/library?${apiParams.toString()}`);
+        const response = await fetch(`/api/jellyfin/library?${apiParams.toString()}`);
         if (!response.ok) {
           throw new Error(`Library request failed with status ${response.status}`);
         }
@@ -236,7 +236,7 @@ function LibraryInner() {
               Library
             </h1>
             <div className="flex items-center gap-2 text-zinc-400">
-              <span className="font-mono text-xs tracking-widest uppercase">Riven</span>
+              <span className="font-mono text-xs tracking-widest uppercase">Jellyfin</span>
               <span className="h-px w-6 bg-zinc-700" />
               <span className="font-mono text-sm text-primary">
                 {totalResults.toLocaleString()} items
@@ -340,7 +340,7 @@ function LibraryInner() {
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
               {libraryItems.map((item, itemIndex) => (
                 <div
-                  key={item.riven_id}
+                  key={item.jellyfin_id || `${item.indexer}-${item.id}`}
                   className="animate-in fade-in slide-in-from-bottom-4 fill-mode-backwards duration-700"
                   style={{ animationDelay: `${itemIndex * 30}ms` }}
                 >

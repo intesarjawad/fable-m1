@@ -52,7 +52,6 @@ export function RequestSheet({
           posterPath: item.poster_path,
           requestedAt: new Date().toISOString(),
           status: "requested",
-          tvdbId: result.tvdbId,
         });
         onClose();
       } else {

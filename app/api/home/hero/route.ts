@@ -1,11 +1,10 @@
-import { resolveRivenConfig } from "@/src/actions/riven";
+import { fetchAllLibraryTmdbIds } from "@/src/actions/media";
 import { getTmdbConfig } from "@/src/actions/store/server-actions";
 import { NextResponse } from "next/server";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const HERO_ITEM_LIMIT = 10;
 const MINIMUM_CROSS_REFERENCED_ITEMS = 5;
-const RIVEN_LIBRARY_FETCH_LIMIT = 100;
 
 interface TmdbTrendingItem {
   id: number;
@@ -19,13 +18,6 @@ interface TmdbTrendingItem {
   release_date?: string;
   first_air_date?: string;
   original_language?: string;
-}
-
-interface RivenLibraryItem {
-  id: string | number;
-  tmdb_id?: string;
-  title: string;
-  type: string;
 }
 
 async function resolveTmdbApiKey(): Promise<string | null> {
@@ -50,50 +42,8 @@ async function fetchTrendingAll(tmdbApiKey: string): Promise<TmdbTrendingItem[]>
   return (data.results ?? []) as TmdbTrendingItem[];
 }
 
-async function fetchRivenLibraryTmdbIds(rivenApiUrl: string, rivenApiKey: string): Promise<Set<number>> {
-  const targetUrl = new URL(`${rivenApiUrl}/api/v1/items`);
-  targetUrl.searchParams.set("limit", String(RIVEN_LIBRARY_FETCH_LIMIT));
-  targetUrl.searchParams.set("sort", "date_desc");
-  targetUrl.searchParams.append("states", "Completed");
-  targetUrl.searchParams.append("states", "PartiallyCompleted");
-  targetUrl.searchParams.append("type", "movie");
-  targetUrl.searchParams.append("type", "show");
-
-  const response = await fetch(targetUrl.toString(), {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "x-api-key": rivenApiKey,
-    },
-    signal: AbortSignal.timeout(15000),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Riven library fetch failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const libraryItems: RivenLibraryItem[] = data.items ?? [];
-
-  const tmdbIds = new Set<number>();
-  for (const item of libraryItems) {
-    if (item.tmdb_id) {
-      const parsedId = parseInt(item.tmdb_id, 10);
-      if (!Number.isNaN(parsedId)) {
-        tmdbIds.add(parsedId);
-      }
-    }
-  }
-
-  return tmdbIds;
-}
-
 export async function GET(): Promise<NextResponse> {
-  const [tmdbApiKey, rivenConfig] = await Promise.all([
-    resolveTmdbApiKey(),
-    resolveRivenConfig(),
-  ]);
+  const tmdbApiKey = await resolveTmdbApiKey();
 
   if (!tmdbApiKey) {
     return NextResponse.json(
@@ -110,28 +60,24 @@ export async function GET(): Promise<NextResponse> {
       (item) => item.backdrop_path && item.media_type !== "person",
     );
 
-    if (!rivenConfig) {
-      // Riven not configured — fall back to trending directly
-      return NextResponse.json({
-        items: trendingWithBackdrops.slice(0, HERO_ITEM_LIMIT),
-      });
-    }
-
-    const baseUrl = rivenConfig.apiUrl.replace(/\/+$/, "");
-
-    let rivenTmdbIds: Set<number>;
+    let libraryTmdbIds: Set<number>;
     try {
-      rivenTmdbIds = await fetchRivenLibraryTmdbIds(baseUrl, rivenConfig.apiKey);
-    } catch (rivenError) {
-      const message = rivenError instanceof Error ? rivenError.message : "Riven unreachable";
-      console.warn(`[home/hero] Riven fetch failed, falling back to trending only: ${message}`);
+      const entries = await fetchAllLibraryTmdbIds();
+      libraryTmdbIds = new Set(
+        entries
+          .map((entry) => entry.tmdbId)
+          .filter((id): id is number => typeof id === "number" && id > 0),
+      );
+    } catch (libraryError) {
+      const message = libraryError instanceof Error ? libraryError.message : "Library unreachable";
+      console.warn(`[home/hero] Jellyfin library fetch failed, falling back to trending only: ${message}`);
       return NextResponse.json({
         items: trendingWithBackdrops.slice(0, HERO_ITEM_LIMIT),
       });
     }
 
     const crossReferencedItems = trendingWithBackdrops.filter((item) =>
-      rivenTmdbIds.has(item.id),
+      libraryTmdbIds.has(item.id),
     );
 
     const heroItems =

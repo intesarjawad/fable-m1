@@ -43,6 +43,7 @@ import {
   Users,
   Wrench,
   CalendarClock,
+  CalendarDays,
   Activity,
   Key,
   Monitor,
@@ -54,7 +55,6 @@ import {
   Signal,
   FastForward,
   Search,
-  CalendarDays,
 } from "lucide-react";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { useSyncPlay } from "@/src/contexts/syncplay-context";

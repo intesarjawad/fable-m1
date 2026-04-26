@@ -280,22 +280,13 @@ export default function RivenCalendarPage() {
       setFetchError(null);
 
       try {
-        const response = await fetch("/api/riven/calendar");
+        const response = await fetch("/api/calendar/upcoming");
         if (!response.ok) {
-          throw new Error(`Riven returned ${response.status}`);
+          throw new Error(`Calendar feed returned ${response.status}`);
         }
 
         const data = await response.json();
-
-        // Riven returns { data: { "key": item, ... } } or an array — handle both shapes
-        let rawItems: CalendarItem[] = [];
-        if (Array.isArray(data)) {
-          rawItems = data;
-        } else if (data?.data && typeof data.data === "object") {
-          rawItems = Object.values(data.data) as CalendarItem[];
-        } else if (data && typeof data === "object") {
-          rawItems = Object.values(data) as CalendarItem[];
-        }
+        const rawItems: CalendarItem[] = Array.isArray(data?.items) ? data.items : [];
 
         if (cancelled) return;
         setAllItems(rawItems.filter((item) => item?.aired_at));

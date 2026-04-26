@@ -32,22 +32,45 @@ export function tmdbBackdropUrl(
   return `${TMDB_IMAGE_BASE}/${TMDB_BACKDROP_SIZES[size]}${backdropPath}`;
 }
 
-/** Collapse Riven pipeline states into user-facing states */
-export function rivenStateToRequestStatus(rivenState: string): RequestStatus {
-  switch (rivenState) {
-    case "Requested":
-    case "Indexed":
+/**
+ * Seerr media status enum:
+ *   1 Unknown · 2 Pending · 3 Processing · 4 Partially Available · 5 Available
+ */
+export const SEERR_STATUS = {
+  Unknown: 1,
+  Pending: 2,
+  Processing: 3,
+  PartiallyAvailable: 4,
+  Available: 5,
+} as const;
+
+/** Map Seerr's numeric status to a user-facing RequestStatus. */
+export function seerrStatusToRequestStatus(status: number | null | undefined): RequestStatus {
+  switch (status) {
+    case SEERR_STATUS.Pending:
       return "requested";
-    case "Scraped":
-    case "Downloaded":
-    case "Symlinked":
+    case SEERR_STATUS.Processing:
       return "getting-ready";
-    case "Completed":
-    case "PartiallyCompleted":
+    case SEERR_STATUS.PartiallyAvailable:
+    case SEERR_STATUS.Available:
       return "ready";
-    case "Failed":
-      return "failed";
     default:
       return "requested";
+  }
+}
+
+/** Map Seerr's numeric status to the badge label rendered by StatusBadge. */
+export function seerrStatusToBadgeLabel(status: number | null | undefined): string | null {
+  switch (status) {
+    case SEERR_STATUS.Pending:
+      return "Requested";
+    case SEERR_STATUS.Processing:
+      return "Downloading";
+    case SEERR_STATUS.PartiallyAvailable:
+      return "PartiallyCompleted";
+    case SEERR_STATUS.Available:
+      return "Completed";
+    default:
+      return null;
   }
 }

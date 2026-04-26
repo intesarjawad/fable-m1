@@ -1584,6 +1584,51 @@ export async function findJellyfinEpisodeId(
   }
 }
 
+/**
+ * Returns a map of Jellyfin episode ids keyed by `episode_number` for one
+ * season of a series — so the detail page can render an "available" badge
+ * (and prefetch a Jellyfin id for play) without an N+1 lookup.
+ */
+export async function fetchJellyfinSeasonEpisodes(
+  seriesJellyfinId: string,
+  seasonNumber: number,
+): Promise<Record<number, string>> {
+  const { serverUrl, user } = await getAuthData();
+  if (!user.AccessToken) throw new Error("No access token found");
+
+  const jellyfinInstance = createJellyfinInstance();
+  const api = jellyfinInstance.createApi(serverUrl);
+  api.accessToken = user.AccessToken;
+
+  try {
+    const itemsApi = getItemsApi(api);
+    const { data } = await itemsApi.getItems({
+      userId: user.Id,
+      parentId: seriesJellyfinId,
+      includeItemTypes: [BaseItemKind.Episode],
+      recursive: true,
+    });
+
+    const map: Record<number, string> = {};
+    for (const ep of data.Items ?? []) {
+      if (
+        ep.ParentIndexNumber === seasonNumber &&
+        typeof ep.IndexNumber === "number" &&
+        ep.Id
+      ) {
+        map[ep.IndexNumber] = ep.Id;
+      }
+    }
+    return map;
+  } catch (error) {
+    console.error(
+      `Failed to fetch Jellyfin episodes for series ${seriesJellyfinId} season ${seasonNumber}:`,
+      error,
+    );
+    return {};
+  }
+}
+
 export async function getNextEpisodeForSeries(
   seriesId: string,
 ): Promise<JellyfinItem | null> {

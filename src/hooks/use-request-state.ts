@@ -38,13 +38,9 @@ export function useRequestState() {
   }, []);
 
   const updateRequestStatus = useCallback(
-    (tmdbId: number, status: RequestStatus, rivenItemId?: number) => {
+    (tmdbId: number, status: RequestStatus) => {
       setRequests((prev) =>
-        prev.map((r) =>
-          r.tmdbId === tmdbId
-            ? { ...r, status, ...(rivenItemId !== undefined ? { rivenItemId } : {}) }
-            : r
-        )
+        prev.map((r) => (r.tmdbId === tmdbId ? { ...r, status } : r))
       );
     },
     []

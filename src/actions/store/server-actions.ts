@@ -105,35 +105,35 @@ export async function executeClearAuthDataAction(
   }
 }
 
-// --- Riven config ---
-const RIVEN_CONFIG_KEY = "riven-config";
+// --- Seerr config ---
+const SEERR_CONFIG_KEY = "seerr-config";
 
-export interface RivenConfig {
+export interface SeerrConfig {
   apiUrl: string;
   apiKey: string;
 }
 
-export async function setRivenConfig(value: RivenConfig) {
-  (await cookies()).set(RIVEN_CONFIG_KEY, JSON.stringify(value), {
+export async function setSeerrConfig(value: SeerrConfig) {
+  (await cookies()).set(SEERR_CONFIG_KEY, JSON.stringify(value), {
     httpOnly: true,
     sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
   });
 }
 
-export async function getRivenConfig(): Promise<RivenConfig | null> {
+export async function getSeerrConfig(): Promise<SeerrConfig | null> {
   const cookieStore = await cookies();
-  const val = cookieStore.get(RIVEN_CONFIG_KEY);
+  const val = cookieStore.get(SEERR_CONFIG_KEY);
   if (!val || !val.value) return null;
   try {
-    return JSON.parse(val.value) as RivenConfig;
+    return JSON.parse(val.value) as SeerrConfig;
   } catch {
     return null;
   }
 }
 
-export async function removeRivenConfig() {
-  (await cookies()).delete(RIVEN_CONFIG_KEY);
+export async function removeSeerrConfig() {
+  (await cookies()).delete(SEERR_CONFIG_KEY);
 }
 
 // --- TMDB config ---

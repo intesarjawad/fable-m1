@@ -3,14 +3,14 @@
 import { useEffect, useState, useCallback, Fragment } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { Play, X, Download, Loader2, RotateCcw, ListRestart, Heart } from "lucide-react";
+import { Play, X, Download, Loader2, Heart } from "lucide-react";
 import { toast } from "sonner";
 
-import { tmdbPosterUrl, tmdbBackdropUrl } from "@/src/lib/tmdb";
+import { tmdbPosterUrl, tmdbBackdropUrl, seerrStatusToBadgeLabel, SEERR_STATUS } from "@/src/lib/tmdb";
 import { useJellyfinTmdbMap } from "@/src/hooks/use-jellyfin-tmdb-map";
 import { useIsMobile } from "@/src/hooks/use-mobile";
 import { requestMovie, requestTvShow } from "@/src/actions/request";
-import { findJellyfinEpisodeId } from "@/src/actions/media";
+import { findJellyfinEpisodeId, fetchJellyfinSeasonEpisodes } from "@/src/actions/media";
 import { markFavorite, unmarkFavorite } from "@/src/actions";
 import { usePlayback } from "@/src/hooks/usePlayback";
 
@@ -46,8 +46,8 @@ import {
   type TmdbTvDetails,
   type TmdbSeasonDetails,
   type TmdbEpisode,
-  type RivenMediaItem,
-  type RivenEpisode,
+  type MediaAvailability,
+  type MediaSeasonAvailability,
 } from "@/src/types/details";
 
 // ─── Rating types ────────────────────────────────────────────────────────────
@@ -123,7 +123,6 @@ function MediaCarousel({
 
 interface EpisodeSheetProps {
   episode: TmdbEpisode | null;
-  rivenEpisode: RivenEpisode | null;
   showTitle: string;
   isOpen: boolean;
   onClose: () => void;
@@ -131,19 +130,8 @@ interface EpisodeSheetProps {
   isMobile: boolean;
 }
 
-function formatFileSizeGb(bytes: number): string {
-  return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
-}
-
-function formatAudioChannels(channelCount: number): string {
-  if (channelCount === 8) return "7.1";
-  if (channelCount === 6) return "5.1";
-  return `${channelCount}ch`;
-}
-
 function EpisodeDetailSheet({
   episode,
-  rivenEpisode,
   showTitle,
   isOpen,
   onClose,
@@ -152,9 +140,6 @@ function EpisodeDetailSheet({
 }: EpisodeSheetProps) {
   if (!episode) return null;
 
-  const videoMeta = rivenEpisode?.media_metadata?.video;
-  const audioTracks = rivenEpisode?.media_metadata?.audio_tracks ?? [];
-  const fileEntry = rivenEpisode?.filesystem_entry;
   const stillUrl = episode.still_path
     ? `https://image.tmdb.org/t/p/w780${episode.still_path}`
     : null;
@@ -187,9 +172,6 @@ function EpisodeDetailSheet({
               <Badge variant="outline" className="font-mono text-xs">
                 {episode.runtime} min
               </Badge>
-            )}
-            {rivenEpisode?.state && (
-              <StatusBadge state={rivenEpisode.state} className="text-xs" />
             )}
           </div>
         </SheetHeader>
@@ -224,104 +206,6 @@ function EpisodeDetailSheet({
             </div>
           )}
 
-          {(rivenEpisode?.filesystem_entry || rivenEpisode?.media_metadata) && (
-            <div className="flex flex-col gap-6">
-              <SectionHeading title="File Details" />
-              <div className="flex flex-col gap-4 text-sm">
-                {rivenEpisode.media_metadata?.filename && (
-                  <div>
-                    <p className="text-primary font-mono text-xs font-semibold tracking-wider uppercase">
-                      Current Filename
-                    </p>
-                    <p className="text-muted-foreground mt-1 font-mono text-xs break-all">
-                      {rivenEpisode.media_metadata.filename}
-                    </p>
-                  </div>
-                )}
-
-                {videoMeta && (
-                  <div className="flex flex-col gap-2">
-                    <span className="text-primary font-mono text-xs font-semibold tracking-wider uppercase">
-                      Video
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {videoMeta.resolution_width &&
-                        videoMeta.resolution_height && (
-                          <Badge variant="outline" className="font-mono text-xs">
-                            {videoMeta.resolution_width}&times;
-                            {videoMeta.resolution_height}
-                          </Badge>
-                        )}
-                      {videoMeta.codec && (
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {videoMeta.codec}
-                        </Badge>
-                      )}
-                      {videoMeta.hdr_type && (
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {videoMeta.hdr_type}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {audioTracks.length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    <span className="text-primary font-mono text-xs font-semibold tracking-wider uppercase">
-                      Audio
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {audioTracks.map((track, trackIndex) => (
-                        <Badge
-                          key={trackIndex}
-                          variant="outline"
-                          className="font-mono text-xs"
-                        >
-                          {track.codec}
-                          {track.channels
-                            ? ` ${formatAudioChannels(track.channels)}`
-                            : ""}
-                          {track.language
-                            ? ` (${track.language.toUpperCase()})`
-                            : ""}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {rivenEpisode.media_metadata?.quality_source && (
-                  <div className="flex flex-col gap-2">
-                    <span className="text-primary font-mono text-xs font-semibold tracking-wider uppercase">
-                      Source
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline" className="font-mono text-xs">
-                        {rivenEpisode.media_metadata.quality_source}
-                      </Badge>
-                      {rivenEpisode.media_metadata.is_remux && (
-                        <Badge variant="outline" className="font-mono text-xs">
-                          REMUX
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {fileEntry?.file_size && (
-                  <div className="flex flex-col gap-2">
-                    <span className="text-primary font-mono text-xs font-semibold tracking-wider uppercase">
-                      Size
-                    </span>
-                    <span className="text-muted-foreground font-mono text-xs">
-                      {formatFileSizeGb(fileEntry.file_size)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </SheetContent>
     </Sheet>
@@ -372,17 +256,15 @@ export default function MediaDetailPage() {
   const { play } = usePlayback();
 
   // For TVDB-indexed URLs, the raw ID is a TVDB ID.
-  // rivenLookupId is always the raw ID (Riven indexes TV shows by TVDB ID).
   // resolvedTmdbId starts null for TVDB lookups, gets resolved async.
   const [resolvedTmdbId, setResolvedTmdbId] = useState<number | null>(
     indexer === "tvdb" ? null : rawId,
   );
-  const rivenLookupId = rawId;
 
   // Core data
   const [movieDetails, setMovieDetails] = useState<TmdbMovieDetails | null>(null);
   const [tvDetails, setTvDetails] = useState<TmdbTvDetails | null>(null);
-  const [rivenItem, setRivenItem] = useState<RivenMediaItem | null>(null);
+  const [availability, setAvailability] = useState<MediaAvailability | null>(null);
   const [resolvedTvdbId, setResolvedTvdbId] = useState<number | null>(
     indexer === "tvdb" ? rawId : null,
   );
@@ -393,13 +275,15 @@ export default function MediaDetailPage() {
   const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number>(1);
   const [seasonEpisodes, setSeasonEpisodes] = useState<TmdbEpisode[]>([]);
   const [seasonEpisodesLoading, setSeasonEpisodesLoading] = useState(false);
+  // Jellyfin episode-id map for the currently selected season:
+  // { episode_number → jellyfin_id }. Drives the per-episode "available" badge
+  // and lets us short-circuit findJellyfinEpisodeId on play.
+  const [seasonJellyfinEpisodes, setSeasonJellyfinEpisodes] = useState<Record<number, string>>({});
 
   // UI state
   const [showTrailer, setShowTrailer] = useState(false);
   const [requestingMovie, setRequestingMovie] = useState(false);
   const [requestingTvShow, setRequestingTvShow] = useState(false);
-  const [retrying, setRetrying] = useState(false);
-  const [resetting, setResetting] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
 
@@ -474,33 +358,43 @@ export default function MediaDetailPage() {
           }
         }
 
-        // Step 2: Determine the correct ID for Riven lookup
-        // For movies: use TMDB ID. For TV: use TVDB ID (Riven indexes TV by TVDB).
-        let rivenId: number | string = resolvedTmdbId!;
-        if (mediaType === "tv") {
-          if (indexer === "tvdb") {
-            // Already have the TVDB ID from the URL
-            rivenId = rawId;
-          } else {
-            // Extract TVDB ID from TMDB external_ids
-            const tvData = details as TmdbTvDetails;
-            const tvdbId = tvData.external_ids?.tvdb_id;
-            if (tvdbId) {
-              rivenId = tvdbId;
-              setResolvedTvdbId(tvdbId);
-            }
-          }
+        // Step 2: Resolve TVDB ID for TV (used to look up Jellyfin items
+        // when Jellyfin only has the TVDB provider id).
+        if (mediaType === "tv" && indexer !== "tvdb") {
+          const tvdbId = (details as TmdbTvDetails).external_ids?.tvdb_id;
+          if (tvdbId) setResolvedTvdbId(tvdbId);
         }
 
-        // Step 3: Fetch Riven item state using the correct ID
-        const rivenResponse = await fetch(
-          `/api/riven/items/${rivenId}?media_type=${mediaType}`,
+        // Step 3: Fetch Seerr availability (mediaInfo.status + per-season status)
+        const seerrResponse = await fetch(
+          `/api/seerr/media/${mediaType}/${resolvedTmdbId}`,
         )
           .then((r) => (r.ok ? r.json() : null))
           .catch(() => null);
 
-        if (rivenResponse?.id) {
-          setRivenItem(rivenResponse as RivenMediaItem);
+        const mediaInfo = seerrResponse?.mediaInfo;
+        if (mediaInfo?.status && mediaInfo.status !== SEERR_STATUS.Unknown) {
+          const stateLabel = seerrStatusToBadgeLabel(mediaInfo.status);
+          if (stateLabel) {
+            const seasons: MediaSeasonAvailability[] = (seerrResponse?.seasons ?? [])
+              .map((s: { seasonNumber: number; status: number }) => {
+                const seasonLabel = seerrStatusToBadgeLabel(s.status);
+                return seasonLabel
+                  ? {
+                      season_number: s.seasonNumber,
+                      state: seasonLabel,
+                      rawStatus: s.status,
+                    }
+                  : null;
+              })
+              .filter((s: MediaSeasonAvailability | null): s is MediaSeasonAvailability => s !== null);
+
+            setAvailability({
+              state: stateLabel,
+              rawStatus: mediaInfo.status,
+              seasons,
+            });
+          }
         }
       } catch (err) {
         if (!controller.signal.aborted) {
@@ -606,6 +500,29 @@ export default function MediaDetailPage() {
     return () => controller.abort();
   }, [resolvedTmdbId, mediaType, tvDetails, selectedSeasonNumber]);
 
+  // ─── Per-season Jellyfin availability ─────────────────────────────────────
+  // Pull the Jellyfin episode map for the active season so episode cards can
+  // show an "available" badge and play directly without an extra round trip.
+  useEffect(() => {
+    if (mediaType !== "tv" || !jellyfinEntry?.jellyfinId) {
+      setSeasonJellyfinEpisodes({});
+      return;
+    }
+
+    let cancelled = false;
+    fetchJellyfinSeasonEpisodes(jellyfinEntry.jellyfinId, selectedSeasonNumber)
+      .then((map) => {
+        if (!cancelled) setSeasonJellyfinEpisodes(map);
+      })
+      .catch(() => {
+        if (!cancelled) setSeasonJellyfinEpisodes({});
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mediaType, jellyfinEntry?.jellyfinId, selectedSeasonNumber]);
+
   // ─── Computed values ──────────────────────────────────────────────────────
 
   const backdropUrl = movieDetails
@@ -679,19 +596,6 @@ export default function MediaDetailPage() {
   const similarItems =
     movieDetails?.similar.results ?? tvDetails?.similar.results ?? [];
 
-  // ─── Derived Riven state for current season/episode ────────────────────────
-
-  const selectedRivenSeason =
-    rivenItem?.seasons?.find(
-      (s) => s.season_number === selectedSeasonNumber,
-    ) ?? null;
-
-  const episodeSheetRivenEpisode = selectedEpisode
-    ? (selectedRivenSeason?.episodes?.find(
-        (e) => e.episode_number === selectedEpisode.episode_number,
-      ) ?? null)
-    : null;
-
   // ─── Actions ──────────────────────────────────────────────────────────────
 
   const handlePlay = useCallback(() => {
@@ -740,59 +644,14 @@ export default function MediaDetailPage() {
     }
   }, [resolvedTmdbId, title]);
 
-  const handleRetry = useCallback(async () => {
-    if (!rivenItem?.id) return;
-    setRetrying(true);
-    try {
-      const response = await fetch("/api/riven/items/retry", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: [rivenItem.id.toString()] }),
-      });
-      if (response.ok) {
-        toast.success(`${title} queued for retry`);
-      } else {
-        const data = await response.json().catch(() => null);
-        toast.error(data?.error || "Retry failed");
-      }
-    } catch {
-      toast.error("Failed to retry");
-    } finally {
-      setRetrying(false);
-    }
-  }, [rivenItem?.id, title]);
-
-  const handleReset = useCallback(async () => {
-    if (!rivenItem?.id) return;
-    setResetting(true);
-    try {
-      const response = await fetch("/api/riven/items/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: [rivenItem.id.toString()] }),
-      });
-      if (response.ok) {
-        toast.success(`${title} reset to initial state`);
-      } else {
-        const data = await response.json().catch(() => null);
-        toast.error(data?.error || "Reset failed");
-      }
-    } catch {
-      toast.error("Failed to reset");
-    } finally {
-      setResetting(false);
-    }
-  }, [rivenItem?.id, title]);
-
   const handleEpisodeClick = useCallback(
     async (episode: TmdbEpisode) => {
-      const rivenEp = selectedRivenSeason?.episodes?.find(
-        (e) => e.episode_number === episode.episode_number,
-      );
+      // Prefer the prefetched per-season map; fall back to a single lookup
+      // if this episode isn't in the map yet (e.g. another season is open).
+      let resolvedJellyfinId: string | null =
+        seasonJellyfinEpisodes[episode.episode_number] ?? null;
 
-      // Resolve Jellyfin ID for completed episodes so the sheet can show a play button
-      let resolvedJellyfinId: string | null = null;
-      if (rivenEp?.state === "Completed" && jellyfinEntry) {
+      if (!resolvedJellyfinId && jellyfinEntry) {
         try {
           resolvedJellyfinId = await findJellyfinEpisodeId(
             jellyfinEntry.jellyfinId,
@@ -808,7 +667,7 @@ export default function MediaDetailPage() {
       setSelectedEpisode(episode);
       setIsEpisodeSheetOpen(true);
     },
-    [selectedRivenSeason, jellyfinEntry],
+    [jellyfinEntry, seasonJellyfinEpisodes],
   );
 
   const handleEpisodePlay = useCallback(async () => {
@@ -853,15 +712,13 @@ export default function MediaDetailPage() {
     );
   }
 
-  // Trust Riven as the source of truth for item state
-  const isInRiven = rivenItem !== null;
-  const isCompleted = rivenItem?.state === "Completed";
-  const isPartiallyCompleted = rivenItem?.state === "PartiallyCompleted";
-  const ONGOING_STATES = new Set(["Requested", "Indexed", "Scraped", "Downloaded", "Symlinked", "Downloading"]);
-  const isOngoing = rivenItem !== null && ONGOING_STATES.has(rivenItem.state);
-  const canRetry = isInRiven && !isCompleted && !isOngoing;
-  // Jellyfin entry used only for getting the player URL
-  const canPlay = isCompleted || isPartiallyCompleted || jellyfinEntry !== undefined;
+  // Seerr is the source of truth for request/availability state.
+  const isTracked = availability !== null;
+  const isAvailable =
+    availability?.rawStatus === SEERR_STATUS.Available ||
+    availability?.rawStatus === SEERR_STATUS.PartiallyAvailable;
+  // Jellyfin entry is what actually unlocks playback; Seerr "Available" is a hint.
+  const canPlay = isAvailable || jellyfinEntry !== undefined;
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden">
@@ -976,9 +833,9 @@ export default function MediaDetailPage() {
                 <h1 className="text-foreground text-3xl font-black tracking-tight drop-shadow-md sm:text-4xl lg:text-5xl">
                   {title}
                 </h1>
-                {rivenItem?.state && (
+                {availability?.state && (
                   <StatusBadge
-                    state={rivenItem.state}
+                    state={availability.state}
                     size="default"
                     className="px-3 py-1.5 text-sm font-medium"
                   />
@@ -1023,81 +880,43 @@ export default function MediaDetailPage() {
                   </Button>
                 )}
 
-                {/* Request -- when NOT in Jellyfin AND NOT in Riven */}
-                {!canPlay && !isInRiven && (
-                  <>
-                    {mediaType === "movie" ? (
-                      <Button
-                        variant="secondary"
-                        size="default"
-                        disabled={requestingMovie}
-                        onClick={handleMovieRequest}
-                        className="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary border bg-transparent px-4"
-                      >
-                        {requestingMovie ? (
-                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Download className="mr-1.5 h-4 w-4" />
-                        )}
-                        Request
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        size="default"
-                        disabled={requestingTvShow}
-                        onClick={handleTvRequest}
-                        className="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary border bg-transparent px-4"
-                      >
-                        {requestingTvShow ? (
-                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Download className="mr-1.5 h-4 w-4" />
-                        )}
-                        Request
-                      </Button>
-                    )}
-                  </>
+                {/* Request — shown when item isn't already tracked or available. */}
+                {!canPlay && !isTracked && (
+                  mediaType === "movie" ? (
+                    <Button
+                      variant="secondary"
+                      size="default"
+                      disabled={requestingMovie}
+                      onClick={handleMovieRequest}
+                      className="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary border bg-transparent px-4"
+                    >
+                      {requestingMovie ? (
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="mr-1.5 h-4 w-4" />
+                      )}
+                      Request
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="default"
+                      disabled={requestingTvShow}
+                      onClick={handleTvRequest}
+                      className="border-primary/50 text-primary hover:bg-primary/10 hover:text-primary hover:border-primary border bg-transparent px-4"
+                    >
+                      {requestingTvShow ? (
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="mr-1.5 h-4 w-4" />
+                      )}
+                      Request
+                    </Button>
+                  )
                 )}
 
-                {/* Retry -- stuck or incomplete items (not actively processing) */}
-                {canRetry && (
-                  <Button
-                    variant="secondary"
-                    size="default"
-                    disabled={retrying}
-                    onClick={handleRetry}
-                    className="border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
-                  >
-                    {retrying ? (
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    ) : (
-                      <RotateCcw className="mr-1.5 h-4 w-4" />
-                    )}
-                    Retry
-                  </Button>
-                )}
-
-                {/* Reset -- re-download from scratch */}
-                {isInRiven && (
-                  <Button
-                    variant="secondary"
-                    size="default"
-                    disabled={resetting}
-                    onClick={handleReset}
-                    className="border-muted-foreground/30 text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50 border bg-transparent px-4"
-                  >
-                    {resetting ? (
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                    ) : (
-                      <ListRestart className="mr-1.5 h-4 w-4" />
-                    )}
-                    Reset
-                  </Button>
-                )}
-
-                {/* Request More -- when IS in Riven AND is TV */}
-                {isInRiven && mediaType === "tv" && (
+                {/* Request More — TV shows tracked in Seerr can request additional seasons. */}
+                {isTracked && mediaType === "tv" && (
                   <Button
                     variant="secondary"
                     size="default"
@@ -1193,7 +1012,7 @@ export default function MediaDetailPage() {
               <SectionHeading title="Seasons" />
               <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-none">
                 {tvDetails.seasons.map((season) => {
-                  const rivenSeason = rivenItem?.seasons?.find(
+                  const seasonAvail = availability?.seasons?.find(
                     (s) => s.season_number === season.season_number,
                   );
                   const isSelected =
@@ -1218,9 +1037,9 @@ export default function MediaDetailPage() {
                         posterUrl={tmdbPosterUrl(season.poster_path, "medium")}
                         showContent
                         topRight={
-                          rivenSeason?.state ? (
+                          seasonAvail?.state ? (
                             <StatusBadge
-                              state={rivenSeason.state}
+                              state={seasonAvail.state}
                               size="default"
                             />
                           ) : undefined
@@ -1252,12 +1071,9 @@ export default function MediaDetailPage() {
               ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3 2xl:grid-cols-4">
                   {seasonEpisodes.map((episode) => {
-                    const rivenEpisode =
-                      selectedRivenSeason?.episodes?.find(
-                        (e) =>
-                          e.episode_number === episode.episode_number,
-                      ) ?? null;
-
+                    const inJellyfin = Boolean(
+                      seasonJellyfinEpisodes[episode.episode_number],
+                    );
                     return (
                       <button
                         key={episode.id}
@@ -1278,7 +1094,7 @@ export default function MediaDetailPage() {
                               ? `${episode.runtime} min`
                               : undefined
                           }
-                          state={rivenEpisode?.state}
+                          state={inJellyfin ? "Completed" : undefined}
                           overview={episode.overview}
                           className="h-full transition-transform duration-300 group-hover:scale-[1.01] group-hover:shadow-lg"
                         />
@@ -1355,7 +1171,6 @@ export default function MediaDetailPage() {
       {/* ── Episode detail sheet ─────────────────────────────────────────────── */}
       <EpisodeDetailSheet
         episode={selectedEpisode}
-        rivenEpisode={episodeSheetRivenEpisode}
         showTitle={title}
         isOpen={isEpisodeSheetOpen}
         onClose={() => {
@@ -1363,7 +1178,7 @@ export default function MediaDetailPage() {
           setSelectedEpisode(null);
           setEpisodeJellyfinId(null);
         }}
-        onPlay={episodeSheetRivenEpisode?.state === "Completed" ? handleEpisodePlay : undefined}
+        onPlay={episodeJellyfinId ? handleEpisodePlay : undefined}
         isMobile={isMobile}
       />
     </div>

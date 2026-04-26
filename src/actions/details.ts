@@ -32,9 +32,6 @@ export type {
   TmdbRecommendationTv,
   TmdbSimilarTv,
   TmdbTvDetails,
-  RivenEpisode,
-  RivenSeason,
-  RivenMediaItem,
 } from "@/src/types/details";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";

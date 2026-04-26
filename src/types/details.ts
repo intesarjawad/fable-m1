@@ -212,44 +212,23 @@ export interface TmdbTvDetails {
   };
 }
 
-// ─── Riven item shape (extended=true) ────────────────────────────────────────
+// ─── Seerr media-info shape (used by detail page) ────────────────────────────
 
-export interface RivenEpisode {
-  id: number;
-  episode_number: number;
+/**
+ * Resolved availability for a movie or show. `state` is the user-facing label
+ * (e.g. "Completed", "PartiallyCompleted", "Requested", "Downloading") derived
+ * from Seerr's numeric `mediaInfo.status` via `seerrStatusToBadgeLabel`.
+ */
+export interface MediaAvailability {
   state: string;
-  filesystem_entry?: {
-    file_size?: number;
-  } | null;
-  media_metadata?: {
-    filename?: string;
-    quality_source?: string;
-    is_remux?: boolean;
-    video?: {
-      resolution_width?: number;
-      resolution_height?: number;
-      codec?: string;
-      hdr_type?: string;
-    };
-    audio_tracks?: Array<{
-      codec?: string;
-      channels?: number;
-      language?: string;
-    }>;
-  } | null;
+  rawStatus: number;
+  seasons?: MediaSeasonAvailability[];
 }
 
-export interface RivenSeason {
-  id: number;
+export interface MediaSeasonAvailability {
   season_number: number;
   state: string;
-  episodes?: RivenEpisode[];
-}
-
-export interface RivenMediaItem {
-  id: number;
-  state: string;
-  seasons?: RivenSeason[];
+  rawStatus: number;
 }
 
 // ─── Pure helper functions ────────────────────────────────────────────────────

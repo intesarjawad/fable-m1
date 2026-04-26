@@ -92,9 +92,7 @@ export interface TrackedRequest {
   title: string;
   posterPath: string | null;
   requestedAt: string; // ISO date
-  rivenItemId?: number;
   status: RequestStatus;
-  tvdbId?: number; // stored after conversion for TV
 }
 
 // Type guards

@@ -249,7 +249,7 @@ export default function HomePage() {
       .finally(() => setWatchlistLoaded(true));
 
     // Recently Added
-    fetch("/api/riven/library?sort=date_desc&limit=15&type=movie&type=show")
+    fetch("/api/jellyfin/library?sort=date_desc&limit=15&type=movie&type=show")
       .then((res) => (res.ok ? res.json() : { items: [] }))
       .then(({ items }: { items: LibraryItem[] }) => setRecentlyAddedItems(items ?? []))
       .catch(() => {})

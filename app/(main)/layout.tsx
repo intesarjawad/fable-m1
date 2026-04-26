@@ -4,8 +4,6 @@ import { FullscreenDetector } from "@/src/components/fullscreen-detector";
 import { LayoutContent } from "@/src/components/layout-content";
 import { useAuth } from "@/src/hooks/useAuth";
 import { PlaybackProvider } from "@/src/playback/context/PlaybackProvider";
-import { RivenProvider } from "@/src/contexts/riven-context";
-import { NotificationsProvider } from "@/src/contexts/notifications-context";
 import { AuthErrorHandler } from "@/src/components/auth-error-handler";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -27,14 +25,10 @@ export default function MainLayout({
   return (
     <JotaiProvider>
       <PlaybackProvider>
-        <RivenProvider>
-          <NotificationsProvider>
-            <FullscreenDetector />
-            <AuthErrorHandler>
-              <LayoutContent>{children}</LayoutContent>
-            </AuthErrorHandler>
-          </NotificationsProvider>
-        </RivenProvider>
+        <FullscreenDetector />
+        <AuthErrorHandler>
+          <LayoutContent>{children}</LayoutContent>
+        </AuthErrorHandler>
       </PlaybackProvider>
     </JotaiProvider>
   );
