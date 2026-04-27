@@ -31,7 +31,7 @@ const HEVC_MEDIA_TYPES = [
 ];
 
 let cachedHevcSupport: boolean | null = null;
-let cachedNativeMkvSupport: boolean | null = null;
+let cachedNativeMkvSupport: { h264: boolean; hevc: boolean } | null = null;
 
 /**
  * Whether the current browser can decode HEVC (hvc1/hev1) for HLS-fMP4 stream-copy.
@@ -74,32 +74,36 @@ export function canBrowserDirectPlayHevc(): boolean {
 }
 
 /**
- * Whether the browser's *native* `<video>` pipeline can play MKV directly.
+ * Granular probe of which MKV codec combos the browser's *native* `<video>`
+ * pipeline can decode.
  *
  * Probed via `video.canPlayType` because that's what the native pipeline
  * actually consults — distinct from `MediaSource.isTypeSupported`, which gates
- * the MSE pipeline used by hls.js. Some Chromium configurations (notably
- * Linux + NVIDIA) decode HEVC main 10 / Dolby Vision NAL units via the native
- * path even when MSE refuses them, so direct-playing the static MKV URL keeps
- * us on the pipeline that actually works.
+ * the MSE pipeline used by hls.js. The two probes cover the H.264+AAC and
+ * HEVC main10+AC-3 combos that account for nearly every grab.
  *
- * Probes h264+AAC and HEVC main10+AC-3 — the two combos covering most grabs.
- * If neither comes back truthy, MKV stays out of the DirectPlay profile and
- * playback falls back to HLS-fMP4 remux.
+ * The DeviceProfile uses these flags to gate MKV DirectPlay *per-codec* rather
+ * than as a single yes/no — because Brave on Linux decodes MKV+H.264 natively
+ * but refuses MKV+HEVC (Dolby Vision NAL units fail). H.264 MKV → DirectPlay →
+ * native pipeline (fast path); HEVC MKV → falls through to HLS-remux so the
+ * server-side ffmpeg wrapper can strip DV before delivery.
  */
-export function canBrowserNativelyPlayMkv(): boolean {
+export function getNativeMkvSupport(): { h264: boolean; hevc: boolean } {
   if (cachedNativeMkvSupport !== null) return cachedNativeMkvSupport;
   if (typeof document === "undefined") {
-    cachedNativeMkvSupport = false;
+    cachedNativeMkvSupport = { h264: false, hevc: false };
     return cachedNativeMkvSupport;
   }
 
   const probe = document.createElement("video");
-  const supported =
-    !!probe.canPlayType('video/x-matroska; codecs="avc1.640028, mp4a.40.2"') ||
-    !!probe.canPlayType('video/x-matroska; codecs="hvc1.2.4.L150.B0, ac-3"');
-
-  cachedNativeMkvSupport = supported;
+  cachedNativeMkvSupport = {
+    h264: !!probe.canPlayType(
+      'video/x-matroska; codecs="avc1.640028, mp4a.40.2"',
+    ),
+    hevc: !!probe.canPlayType(
+      'video/x-matroska; codecs="hvc1.2.4.L150.B0, ac-3"',
+    ),
+  };
   return cachedNativeMkvSupport;
 }
 

@@ -1,6 +1,6 @@
 import {
   canBrowserDirectPlayHevc,
-  canBrowserNativelyPlayMkv,
+  getNativeMkvSupport,
 } from "@/src/actions/utils";
 
 /**
@@ -8,11 +8,12 @@ import {
  *
  * The shape says:
  *   - Direct-play browser-native container+codec combos as static streams.
- *     MP4 family is always direct-play. MKV is added when the *native* `<video>`
- *     pipeline (canPlayType) reports it can decode it — Chromium's native path
- *     on some platforms handles HEVC main10 / DV NAL units that the MSE
- *     pipeline (used by hls.js) refuses, so favouring DirectPlay for MKV when
- *     the native path is available avoids that trap.
+ *     MP4 family is always direct-play. MKV gets a separate entry whose codec
+ *     list reflects exactly what the *native* `<video>` pipeline reports it can
+ *     decode (per `getNativeMkvSupport`), so an HEVC-MKV file on Brave (where
+ *     plain HEVC works in MP4 but DV NAL units in MKV don't) deliberately
+ *     misses the DirectPlay match and falls through to HLS-remux — letting a
+ *     server-side ffmpeg wrapper strip DV before delivery.
  *   - For everything else, hand back HLS over MP4 with stream-copy
  *     (no codec re-encode) — i.e. remux only. This matches a server policy that
  *     allows remuxing but disallows codec transcoding.
@@ -24,11 +25,17 @@ import {
  */
 export function getDeviceProfile() {
   const hevcOk = canBrowserDirectPlayHevc();
-  const mkvOk = canBrowserNativelyPlayMkv();
+  const nativeMkv = getNativeMkvSupport();
   const directPlayVideoCodecs = hevcOk ? "h264,hevc,vp9,av1" : "h264,vp9,av1";
-  const directPlayContainers = mkvOk
-    ? "mp4,m4v,mov,mkv"
-    : "mp4,m4v,mov";
+
+  // Per-codec MKV native gate. Build the codec list from whichever probes
+  // came back truthy. Empty string = no MKV DirectPlay entry at all.
+  const mkvVideoCodecs = [
+    nativeMkv.h264 ? "h264" : null,
+    nativeMkv.hevc ? "hevc" : null,
+  ]
+    .filter((c): c is string => c !== null)
+    .join(",");
 
   return {
     MaxStreamingBitrate: 120_000_000,
@@ -43,11 +50,21 @@ export function getDeviceProfile() {
         AudioCodec: "vorbis,opus",
       },
       {
-        Container: directPlayContainers,
+        Container: "mp4,m4v,mov",
         Type: "Video",
         VideoCodec: directPlayVideoCodecs,
         AudioCodec: "aac,mp3,opus,flac,ac3,eac3",
       },
+      ...(mkvVideoCodecs
+        ? [
+            {
+              Container: "mkv",
+              Type: "Video",
+              VideoCodec: mkvVideoCodecs,
+              AudioCodec: "aac,mp3,opus,flac,ac3,eac3",
+            },
+          ]
+        : []),
     ],
 
     TranscodingProfiles: [
