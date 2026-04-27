@@ -454,10 +454,38 @@ export function usePlaybackManager(): PlaybackContextValue {
           // set — Fable just consumes the decision instead of guessing.
           const { serverUrl } = await getAuthData();
           const profile = getDeviceProfile();
-          const subIndexForJf =
-            urlSubtitleIndex === undefined || urlSubtitleIndex === -1
-              ? undefined
-              : urlSubtitleIndex;
+
+          // Subtitle index for the PlaybackInfo POST. If the user picked a
+          // specific track, pass it. Otherwise fall back to the server default —
+          // unless that default is an image-based subtitle (PGS/DVB/DVD), in
+          // which case pass -1 to suppress it. Image subs can't be sidecar-rendered
+          // and force JF to burn them into the video, which forces a full video
+          // re-encode and kills the wrapper-remux fast path.
+          const IMAGE_SUB_CODECS = new Set([
+            "pgssub",
+            "pgs",
+            "dvbsub",
+            "dvdsub",
+            "hdmv_pgs_subtitle",
+          ]);
+          let subIndexForJf: number | undefined;
+          if (urlSubtitleIndex !== undefined && urlSubtitleIndex !== -1) {
+            subIndexForJf = urlSubtitleIndex;
+          } else {
+            const defaultIdx = mediaSource.DefaultSubtitleStreamIndex;
+            const defaultSubStream =
+              defaultIdx != null
+                ? mediaSource.MediaStreams?.find(
+                    (s) => s.Type === "Subtitle" && s.Index === defaultIdx,
+                  )
+                : undefined;
+            const defaultIsImageSub =
+              defaultSubStream &&
+              IMAGE_SUB_CODECS.has(
+                (defaultSubStream.Codec || "").toLowerCase(),
+              );
+            subIndexForJf = defaultIsImageSub ? -1 : undefined;
+          }
 
           const pbInfoUrl = `${serverUrl}/Items/${itemToPlay!.Id}/PlaybackInfo?userId=${user.Id}&api_key=${user.AccessToken}`;
           const pbInfoResponse = await fetch(pbInfoUrl, {
