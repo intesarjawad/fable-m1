@@ -9,14 +9,13 @@ import {
   reportPlaybackProgress,
   reportPlaybackStopped,
   getAuthData,
-  getStreamUrl,
-  getDirectStreamUrl,
   getSubtitleTracks,
   markFavorite,
   unmarkFavorite,
 } from "../../actions";
 import { PlaybackState, Player, PlayOptions, PlayerType } from "../types";
 import { PlayQueueManager } from "../utils/playQueueManager";
+import { getDeviceProfile } from "../utils/deviceProfile";
 import { v4 as uuidv4 } from "uuid";
 
 export const playQueueManager = new PlayQueueManager();
@@ -421,6 +420,8 @@ export function usePlaybackManager(): PlaybackContextValue {
             }
           }
 
+          // Sidecar tracks render client-side via <track>; tell JF "no subtitle"
+          // (-1) so it doesn't burn them in.
           if (
             options.textTracks &&
             urlSubtitleIndex !== undefined &&
@@ -448,59 +449,55 @@ export function usePlaybackManager(): PlaybackContextValue {
             }
           }
 
-          const SUPPORTED_CONTAINERS = ["mp4", "m4v", "mov", "webm"];
-          const isContainerSupported = SUPPORTED_CONTAINERS.includes(
-            (mediaSource.Container || "").toLowerCase(),
-          );
+          // Ask Jellyfin to pick the play method using a real DeviceProfile.
+          // The server returns a MediaSource with SupportsDirectPlay/TranscodingUrl
+          // set — Fable just consumes the decision instead of guessing.
+          const { serverUrl } = await getAuthData();
+          const profile = getDeviceProfile();
+          const subIndexForJf =
+            urlSubtitleIndex === undefined || urlSubtitleIndex === -1
+              ? undefined
+              : urlSubtitleIndex;
 
-          const isDirectPlayCompatible =
-            isContainerSupported &&
-            (mediaSource.SupportsDirectPlay ||
-              (mediaSource.Container === "mp4" &&
-                mediaSource.MediaStreams?.some(
-                  (s) => s.Type === "Video" && s.Codec === "h264",
-                )));
+          const pbInfoUrl = `${serverUrl}/Items/${itemToPlay!.Id}/PlaybackInfo?userId=${user.Id}&api_key=${user.AccessToken}`;
+          const pbInfoResponse = await fetch(pbInfoUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              DeviceProfile: profile,
+              MaxStreamingBitrate: options.videoBitrate || 120_000_000,
+              MediaSourceId: mediaSource.Id,
+              AudioStreamIndex: options.audioStreamIndex,
+              SubtitleStreamIndex: subIndexForJf,
+              StartTimeTicks: options.startPositionTicks || 0,
+            }),
+          });
 
-          const isBitrateCompatible =
-            !options.videoBitrate ||
-            (mediaSource.Bitrate &&
-              options.videoBitrate >= mediaSource.Bitrate);
-
-          const selectedAudio = mediaSource.MediaStreams?.find(
-            (s) => s.Type === "Audio" && s.Index === options.audioStreamIndex,
-          );
-          const SUPPORTED_AUDIO_CODECS = [
-            "aac",
-            "mp3",
-            "opus",
-            "flac",
-            "vorbis",
-          ];
-          const isAudioCompatible =
-            selectedAudio &&
-            SUPPORTED_AUDIO_CODECS.includes(
-              (selectedAudio.Codec || "").toLowerCase(),
+          if (!pbInfoResponse.ok) {
+            throw new Error(
+              `PlaybackInfo failed: ${pbInfoResponse.status} ${pbInfoResponse.statusText}`,
             );
+          }
 
-          if (
-            isDirectPlayCompatible &&
-            urlSubtitleIndex === -1 &&
-            isBitrateCompatible &&
-            isAudioCompatible
-          ) {
-            options.url = await getDirectStreamUrl(
-              itemToPlay!.Id!,
-              mediaSource,
-              options.audioStreamIndex,
-            );
+          const pbInfoData = await pbInfoResponse.json();
+          const ms = pbInfoData.MediaSources?.[0];
+          if (!ms) {
+            throw new Error("PlaybackInfo returned no playable media source");
+          }
+
+          // Adopt the resolved source so downstream state + reporting use the
+          // same Id/streams Jellyfin picked.
+          mediaSource = ms;
+
+          if (ms.SupportsDirectPlay) {
+            const tagParam = ms.ETag ? `&Tag=${ms.ETag}` : "";
+            options.url = `${serverUrl}/Videos/${itemToPlay!.Id}/stream?Static=true&MediaSourceId=${ms.Id}&api_key=${user.AccessToken}${tagParam}`;
+          } else if (ms.TranscodingUrl) {
+            // JF returns a relative URL like /videos/{id}/master.m3u8?... — prepend server.
+            options.url = `${serverUrl}${ms.TranscodingUrl}`;
           } else {
-            options.url = await getStreamUrl(
-              itemToPlay!.Id!,
-              mediaSource.Id,
-              undefined,
-              options.videoBitrate,
-              options.audioStreamIndex,
-              urlSubtitleIndex,
+            throw new Error(
+              "PlaybackInfo: server returned neither DirectPlay nor TranscodingUrl",
             );
           }
         } catch (e) {

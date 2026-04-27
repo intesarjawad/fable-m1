@@ -16,11 +16,9 @@ import {
   CultureDto,
   CountryInfo,
 } from "@jellyfin/sdk/lib/generated-client/models";
-import { MediaSourceInfo } from "@jellyfin/sdk/lib/generated-client/models/media-source-info";
 import axios from "axios";
 import { createJellyfinInstance } from "../lib/utils";
 import { JellyfinUserWithToken } from "../types/jellyfin";
-import { v4 as uuidv4 } from "uuid";
 import { StoreAuthData } from "./store/store-auth-data";
 import { StoreServerURL } from "./store/store-server-url";
 import { isAuthError } from "./media";
@@ -205,84 +203,6 @@ export async function getDownloadUrl(itemId: string): Promise<string> {
   const { serverUrl, user } = await getAuthData();
 
   return `${serverUrl}/Items/${itemId}/Download?api_key=${user.AccessToken}`;
-}
-
-export async function getStreamUrl(
-  itemId: string,
-  mediaSourceId: string,
-  quality?: string,
-  videoBitrate?: number,
-  audioStreamIndex: number = 1,
-  subtitleStreamIndex?: number,
-): Promise<string> {
-  const { serverUrl, user } = await getAuthData();
-  const supportsHevc = canBrowserDirectPlayHevc();
-  const preferredVideoCodecs = supportsHevc ? "h264,hevc" : "h264";
-  const requireAvc = (!supportsHevc).toString();
-  const allowVideoStreamCopy = "true";
-
-  // Generate a unique PlaySessionId for each stream request
-  const playSessionId = uuidv4();
-
-  let url = `${serverUrl}/Videos/${itemId}/master.m3u8?api_key=${user.AccessToken}&MediaSourceId=${mediaSourceId}&PlaySessionId=${playSessionId}&VideoCodec=${preferredVideoCodecs}&AudioCodec=aac&TranscodingProtocol=hls&RequireAvc=${requireAvc}&AllowVideoStreamCopy=${allowVideoStreamCopy}&AudioStreamIndex=${audioStreamIndex}&SegmentContainer=mp4&BreakOnNonKeyFrames=True&MinSegments=2&MaxFramerate=60`;
-
-  if (subtitleStreamIndex !== undefined) {
-    url += `&SubtitleStreamIndex=${subtitleStreamIndex}`;
-  }
-
-  // Apply custom bitrate if specified (takes precedence over quality presets)
-  if (videoBitrate && videoBitrate > 0) {
-    url += `&videoBitRate=${videoBitrate}`;
-  } else if (quality) {
-    // Fallback to existing quality presets if no custom bitrate is set
-    switch (quality) {
-      case "2160p":
-        url += "&width=3840&height=2160&videoBitRate=20000000";
-        break;
-      case "1080p":
-        url += "&width=1920&height=1080&videoBitRate=8000000";
-        break;
-      case "720p":
-        url += "&width=1280&height=720&videoBitRate=4000000";
-        break;
-    }
-  } else {
-    // Default cap: 10 Mbps (High efficiency, good performance)
-    // This prevents "Auto" (undefined) from requesting unlimited bitrate which causes lag
-    url += "&videoBitRate=10000000";
-  }
-
-  return url;
-}
-
-export async function getDirectStreamUrl(
-  itemId: string,
-  mediaSource: MediaSourceInfo,
-  audioStreamIndex: number = 1,
-): Promise<string> {
-  const { serverUrl, user } = await getAuthData();
-  if (!mediaSource.Id) {
-    throw new Error("Missing media source id for direct play");
-  }
-
-  const playSessionId = uuidv4();
-  const container = mediaSource.Container || "mp4";
-  const params = new URLSearchParams({
-    api_key: user.AccessToken || "",
-    Static: "true",
-    MediaSourceId: mediaSource.Id,
-    PlaySessionId: playSessionId,
-  });
-
-  if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
-    params.append("AudioStreamIndex", audioStreamIndex.toString());
-  }
-
-  if (mediaSource.ETag) {
-    params.append("Tag", mediaSource.ETag);
-  }
-
-  return `${serverUrl}/Videos/${itemId}/stream.${container}?${params.toString()}`;
 }
 
 export async function getThemeSongStreamUrl(

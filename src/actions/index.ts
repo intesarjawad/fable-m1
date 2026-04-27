@@ -53,8 +53,6 @@ export {
   getUserImageUrl,
   uploadUserImage,
   getDownloadUrl,
-  getStreamUrl,
-  getDirectStreamUrl,
   getThemeSongStreamUrl,
   getThemeVideoStreamUrl,
   getSubtitleTracks,
