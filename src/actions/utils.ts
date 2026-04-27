@@ -32,6 +32,15 @@ const HEVC_MEDIA_TYPES = [
 
 let cachedHevcSupport: boolean | null = null;
 
+/**
+ * Whether the current browser can decode HEVC (hvc1/hev1) for HLS-fMP4 stream-copy.
+ *
+ * Modern Chrome/Edge (with OS-provided HEVC support: macOS, Windows + HEVC Video
+ * Extension, Android), Safari (iOS, macOS), and other Chromium-based browsers all
+ * decode HEVC when the OS provides a hardware path. We trust the runtime APIs
+ * (`MediaSource.isTypeSupported` for the hls.js / MSE path, `video.canPlayType`
+ * for native HLS) instead of UA-sniffing — they're authoritative.
+ */
 export function canBrowserDirectPlayHevc(): boolean {
   if (cachedHevcSupport !== null) return cachedHevcSupport;
 
@@ -40,23 +49,12 @@ export function canBrowserDirectPlayHevc(): boolean {
     return cachedHevcSupport;
   }
 
-  const ua = navigator.userAgent.toLowerCase();
-  const isIOS = /iphone|ipad|ipod/.test(ua);
-  const isSafari =
-    /safari/.test(ua) && !/chrome|crios|android|fxios|edg/.test(ua);
-  const isAppleDevice = isIOS || (isSafari && /macintosh|mac os/.test(ua));
-
-  if (!isAppleDevice) {
-    cachedHevcSupport = false;
-    return cachedHevcSupport;
-  }
-
-  const mediaSourceSupported =
+  const mseSupported =
     typeof MediaSource !== "undefined" &&
     typeof MediaSource.isTypeSupported === "function" &&
     HEVC_MEDIA_TYPES.some((type) => MediaSource.isTypeSupported(type));
 
-  if (mediaSourceSupported) {
+  if (mseSupported) {
     cachedHevcSupport = true;
     return cachedHevcSupport;
   }

@@ -12,8 +12,9 @@ import { canBrowserDirectPlayHevc } from "@/src/actions/utils";
  *     allows remuxing but disallows codec transcoding.
  *
  * HEVC is opted in only when `canBrowserDirectPlayHevc()` confirms the browser
- * actually decodes hvc1/hev1 (Apple devices); otherwise it's elided so JF won't
- * hand back HEVC variants the browser can't play.
+ * actually decodes hvc1/hev1 (via `MediaSource.isTypeSupported` — covers Safari,
+ * modern Chrome/Edge with OS-provided HEVC, etc.); otherwise it's elided so JF
+ * won't hand back HEVC variants the browser can't play.
  */
 export function getDeviceProfile() {
   const hevcOk = canBrowserDirectPlayHevc();
