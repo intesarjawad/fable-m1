@@ -31,6 +31,7 @@ const HEVC_MEDIA_TYPES = [
 ];
 
 let cachedHevcSupport: boolean | null = null;
+let cachedNativeMkvSupport: boolean | null = null;
 
 /**
  * Whether the current browser can decode HEVC (hvc1/hev1) for HLS-fMP4 stream-copy.
@@ -70,6 +71,36 @@ export function canBrowserDirectPlayHevc(): boolean {
 
   cachedHevcSupport = false;
   return cachedHevcSupport;
+}
+
+/**
+ * Whether the browser's *native* `<video>` pipeline can play MKV directly.
+ *
+ * Probed via `video.canPlayType` because that's what the native pipeline
+ * actually consults — distinct from `MediaSource.isTypeSupported`, which gates
+ * the MSE pipeline used by hls.js. Some Chromium configurations (notably
+ * Linux + NVIDIA) decode HEVC main 10 / Dolby Vision NAL units via the native
+ * path even when MSE refuses them, so direct-playing the static MKV URL keeps
+ * us on the pipeline that actually works.
+ *
+ * Probes h264+AAC and HEVC main10+AC-3 — the two combos covering most grabs.
+ * If neither comes back truthy, MKV stays out of the DirectPlay profile and
+ * playback falls back to HLS-fMP4 remux.
+ */
+export function canBrowserNativelyPlayMkv(): boolean {
+  if (cachedNativeMkvSupport !== null) return cachedNativeMkvSupport;
+  if (typeof document === "undefined") {
+    cachedNativeMkvSupport = false;
+    return cachedNativeMkvSupport;
+  }
+
+  const probe = document.createElement("video");
+  const supported =
+    !!probe.canPlayType('video/x-matroska; codecs="avc1.640028, mp4a.40.2"') ||
+    !!probe.canPlayType('video/x-matroska; codecs="hvc1.2.4.L150.B0, ac-3"');
+
+  cachedNativeMkvSupport = supported;
+  return cachedNativeMkvSupport;
 }
 
 export async function getAuthData(): Promise<{

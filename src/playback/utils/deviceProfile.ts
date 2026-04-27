@@ -1,12 +1,18 @@
-import { canBrowserDirectPlayHevc } from "@/src/actions/utils";
+import {
+  canBrowserDirectPlayHevc,
+  canBrowserNativelyPlayMkv,
+} from "@/src/actions/utils";
 
 /**
  * DeviceProfile that Fable POSTs to /Items/{id}/PlaybackInfo.
  *
  * The shape says:
- *   - Direct-play these (browser-native) container+codec combos as static streams.
- *     MKV is intentionally excluded so JF is forced to remux into HLS-fMP4 instead
- *     of trying to direct-serve a container browsers don't decode.
+ *   - Direct-play browser-native container+codec combos as static streams.
+ *     MP4 family is always direct-play. MKV is added when the *native* `<video>`
+ *     pipeline (canPlayType) reports it can decode it — Chromium's native path
+ *     on some platforms handles HEVC main10 / DV NAL units that the MSE
+ *     pipeline (used by hls.js) refuses, so favouring DirectPlay for MKV when
+ *     the native path is available avoids that trap.
  *   - For everything else, hand back HLS over MP4 with stream-copy
  *     (no codec re-encode) — i.e. remux only. This matches a server policy that
  *     allows remuxing but disallows codec transcoding.
@@ -18,7 +24,11 @@ import { canBrowserDirectPlayHevc } from "@/src/actions/utils";
  */
 export function getDeviceProfile() {
   const hevcOk = canBrowserDirectPlayHevc();
+  const mkvOk = canBrowserNativelyPlayMkv();
   const directPlayVideoCodecs = hevcOk ? "h264,hevc,vp9,av1" : "h264,vp9,av1";
+  const directPlayContainers = mkvOk
+    ? "mp4,m4v,mov,mkv"
+    : "mp4,m4v,mov";
 
   return {
     MaxStreamingBitrate: 120_000_000,
@@ -33,7 +43,7 @@ export function getDeviceProfile() {
         AudioCodec: "vorbis,opus",
       },
       {
-        Container: "mp4,m4v,mov",
+        Container: directPlayContainers,
         Type: "Video",
         VideoCodec: directPlayVideoCodecs,
         AudioCodec: "aac,mp3,opus,flac,ac3,eac3",
