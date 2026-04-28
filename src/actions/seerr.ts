@@ -203,7 +203,7 @@ export async function submitSeerrIssue(input: {
   const config = await resolveSeerrConfig();
   if (!config) {
     console.error("[seerr/issue] Seerr is not configured");
-    return { success: false, message: "Seerr is not configured" };
+    return { success: false, message: "Issue reporting isn't available right now" };
   }
 
   const body: Record<string, unknown> = {
@@ -241,7 +241,7 @@ export async function submitSeerrIssue(input: {
       );
       const message =
         (typeof data?.message === "string" && data.message) ||
-        `Seerr returned ${res.status}`;
+        "Couldn't send your report";
       return { success: false, message };
     }
     const issueId = typeof data?.id === "number" ? data.id : undefined;
@@ -249,10 +249,7 @@ export async function submitSeerrIssue(input: {
     return { success: true, issueId };
   } catch (error) {
     console.error("[seerr/issue] fetch threw:", error);
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : "Issue submission failed",
-    };
+    return { success: false, message: "Couldn't send your report" };
   }
 }
 
@@ -262,7 +259,7 @@ export async function cancelSeerrRequest(
   const config = await resolveSeerrConfig();
   if (!config) {
     console.error("[seerr/cancel] Seerr is not configured");
-    return { success: false, message: "Seerr is not configured" };
+    return { success: false, message: "Cancelling isn't available right now" };
   }
 
   const url = `${config.apiUrl}/request/${requestId}`;
@@ -279,12 +276,9 @@ export async function cancelSeerrRequest(
     }
     const body = await res.text().catch(() => "");
     console.error(`[seerr/cancel] ${res.status} ${res.statusText} — ${body.slice(0, 300)}`);
-    return { success: false, message: `Seerr returned ${res.status}` };
+    return { success: false, message: "Couldn't cancel that request" };
   } catch (error) {
     console.error("[seerr/cancel] fetch threw:", error);
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : "Cancel failed",
-    };
+    return { success: false, message: "Couldn't cancel that request" };
   }
 }

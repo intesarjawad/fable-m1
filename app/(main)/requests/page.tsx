@@ -303,7 +303,7 @@ export default function RequestsPage() {
           My Requests
         </h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          What you&apos;ve asked Sonarr and Radarr to find for you.
+          Titles you&apos;ve asked Fable to add to your library.
         </p>
       </div>
 

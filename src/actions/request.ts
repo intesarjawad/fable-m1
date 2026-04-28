@@ -14,7 +14,7 @@ async function postSeerrRequest(
   const config = await resolveSeerrConfig();
   if (!config) {
     console.error("[seerr/request] Seerr is not configured (no env vars or cookie)");
-    return { success: false, message: "Seerr is not configured" };
+    return { success: false, message: "Requests aren't available right now" };
   }
 
   const url = `${config.apiUrl}/request`;
@@ -46,7 +46,7 @@ async function postSeerrRequest(
       );
       const message =
         (typeof data?.message === "string" && data.message) ||
-        `Seerr returned ${response.status}`;
+        "Couldn't submit your request";
       return { success: false, message };
     }
 
@@ -59,10 +59,7 @@ async function postSeerrRequest(
     return { success: true, message: "Requested", seerrRequestId };
   } catch (error) {
     console.error("[seerr/request] fetch threw:", error);
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : "Request failed",
-    };
+    return { success: false, message: "Couldn't submit your request" };
   }
 }
 
