@@ -225,12 +225,34 @@ export interface MediaAvailability {
   state: AvailabilityState;
   rawStatus: number;
   seasons?: MediaSeasonAvailability[];
+  /** Live download progress entries (one per Sonarr/Radarr grab). */
+  downloads?: MediaDownloadProgress[];
+  /** Seerr's internal media id — needed for issue reporting. */
+  seerrMediaId?: number;
+  /** Pending/processing requests against this media (for cancel UI). */
+  requests?: MediaRequestSummary[];
 }
 
 export interface MediaSeasonAvailability {
   season_number: number;
   state: AvailabilityState;
   rawStatus: number;
+}
+
+export interface MediaDownloadProgress {
+  title: string;
+  size: number;
+  sizeLeft: number;
+  /** ISO 8601 string when Sonarr/Radarr expects completion. */
+  estimatedCompletionTime: string | null;
+}
+
+export interface MediaRequestSummary {
+  id: number;
+  status: number;
+  is4k: boolean;
+  createdAt?: string;
+  requestedByName?: string;
 }
 
 // ─── Pure helper functions ────────────────────────────────────────────────────

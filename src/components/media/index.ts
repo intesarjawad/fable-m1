@@ -2,6 +2,8 @@ export { PortraitCard, PortraitCardSkeleton } from "./portrait-card";
 
 export { StatusBadge } from "./status-badge";
 
+export { DownloadProgress } from "./download-progress";
+
 export { EpisodeCard } from "./episode-card";
 
 export { MediaLink } from "./media-link";

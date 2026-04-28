@@ -8,16 +8,28 @@ import {
 } from "./store/server-actions";
 
 export interface SeerrMediaInfo {
+  id?: number;
   status: number;
   status4k?: number;
   jellyfinMediaId?: string | null;
   requests?: SeerrRequestSummary[];
+  downloadStatus?: SeerrDownloadStatus[];
 }
 
 export interface SeerrRequestSummary {
   id: number;
   status: number;
   is4k: boolean;
+  createdAt?: string;
+  requestedBy?: { id: number; displayName?: string };
+}
+
+export interface SeerrDownloadStatus {
+  title?: string;
+  size?: number;
+  sizeLeft?: number;
+  estimatedCompletionTime?: string | null;
+  status?: string;
 }
 
 export interface SeerrSeasonInfo {

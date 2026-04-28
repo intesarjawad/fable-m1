@@ -26,6 +26,7 @@ import {
 
 import { PortraitCard, PortraitCardSkeleton } from "@/src/components/media/portrait-card";
 import { StatusBadge } from "@/src/components/media/status-badge";
+import { DownloadProgress } from "@/src/components/media/download-progress";
 import { EpisodeCard } from "@/src/components/media/episode-card";
 import { MediaLink } from "@/src/components/media/media-link";
 
@@ -389,10 +390,52 @@ export default function MediaDetailPage() {
               })
               .filter((s: MediaSeasonAvailability | null): s is MediaSeasonAvailability => s !== null);
 
+            const downloads = Array.isArray(mediaInfo.downloadStatus)
+              ? mediaInfo.downloadStatus
+                  .filter(
+                    (d: { size?: number; sizeLeft?: number }) =>
+                      typeof d.size === "number" && typeof d.sizeLeft === "number",
+                  )
+                  .map(
+                    (d: {
+                      title?: string;
+                      size?: number;
+                      sizeLeft?: number;
+                      estimatedCompletionTime?: string | null;
+                    }) => ({
+                      title: d.title ?? "Unknown release",
+                      size: d.size as number,
+                      sizeLeft: d.sizeLeft as number,
+                      estimatedCompletionTime: d.estimatedCompletionTime ?? null,
+                    }),
+                  )
+              : [];
+
+            const requests = Array.isArray(mediaInfo.requests)
+              ? mediaInfo.requests.map(
+                  (r: {
+                    id: number;
+                    status: number;
+                    is4k?: boolean;
+                    createdAt?: string;
+                    requestedBy?: { displayName?: string };
+                  }) => ({
+                    id: r.id,
+                    status: r.status,
+                    is4k: !!r.is4k,
+                    createdAt: r.createdAt,
+                    requestedByName: r.requestedBy?.displayName,
+                  }),
+                )
+              : [];
+
             setAvailability({
               state: stateLabel,
               rawStatus: mediaInfo.status,
               seasons,
+              downloads,
+              seerrMediaId: typeof mediaInfo.id === "number" ? mediaInfo.id : undefined,
+              requests,
             });
           }
         }
@@ -839,6 +882,9 @@ export default function MediaDetailPage() {
                     size="default"
                     className="px-3 py-1.5 text-sm font-medium"
                   />
+                )}
+                {availability?.downloads && availability.downloads.length > 0 && (
+                  <DownloadProgress downloads={availability.downloads} />
                 )}
               </div>
 
