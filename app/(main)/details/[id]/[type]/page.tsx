@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Fragment } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { Play, X, Download, Loader2, Heart, MessageSquare } from "lucide-react";
+import { Cast, Play, X, Download, Loader2, Heart, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 
 import { tmdbPosterUrl, tmdbBackdropUrl, seerrStatusToBadgeLabel, SEERR_STATUS } from "@/src/lib/tmdb";
@@ -30,6 +30,7 @@ import { DownloadProgress } from "@/src/components/media/download-progress";
 import { EpisodeCard } from "@/src/components/media/episode-card";
 import { MediaLink } from "@/src/components/media/media-link";
 import { ReportIssueDialog } from "@/src/components/media/report-issue-dialog";
+import { CastTargetPicker } from "@/src/components/media/cast-target-picker";
 
 import {
   fetchMovieDetails,
@@ -288,6 +289,7 @@ export default function MediaDetailPage() {
   const [requestingTvShow, setRequestingTvShow] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [issueDialogOpen, setIssueDialogOpen] = useState(false);
+  const [castDialogOpen, setCastDialogOpen] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
 
   // Episode sheet state
@@ -904,6 +906,20 @@ export default function MediaDetailPage() {
                   </Button>
                 )}
 
+                {/* Cast -- send to a remote Jellyfin player (MPV Shim, JMP, etc.) */}
+                {jellyfinEntry && (
+                  <Button
+                    variant="secondary"
+                    size="default"
+                    onClick={() => setCastDialogOpen(true)}
+                    className="border-muted-foreground/30 text-muted-foreground hover:bg-muted hover:text-foreground border bg-transparent px-4"
+                    aria-label="Cast to a device"
+                  >
+                    <Cast className="mr-1.5 h-4 w-4" />
+                    Cast
+                  </Button>
+                )}
+
                 {/* Watchlist -- personal bookmark, shown whenever Jellyfin knows the item */}
                 {jellyfinEntry && (
                   <Button
@@ -1249,6 +1265,15 @@ export default function MediaDetailPage() {
           onClose={() => setIssueDialogOpen(false)}
           mediaId={availability.seerrMediaId}
           title={title}
+        />
+      )}
+
+      {jellyfinEntry && (
+        <CastTargetPicker
+          isOpen={castDialogOpen}
+          onClose={() => setCastDialogOpen(false)}
+          itemId={jellyfinEntry.jellyfinId}
+          itemTitle={title}
         />
       )}
     </div>
