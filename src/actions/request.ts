@@ -12,10 +12,16 @@ async function postSeerrRequest(
   body: Record<string, unknown>,
 ): Promise<RequestResult> {
   const config = await resolveSeerrConfig();
-  if (!config) return { success: false, message: "Seerr is not configured" };
+  if (!config) {
+    console.error("[seerr/request] Seerr is not configured (no env vars or cookie)");
+    return { success: false, message: "Seerr is not configured" };
+  }
+
+  const url = `${config.apiUrl}/request`;
+  console.log("[seerr/request] POST", url, JSON.stringify(body));
 
   try {
-    const response = await fetch(`${config.apiUrl}/request`, {
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "X-Api-Key": config.apiKey,
@@ -25,21 +31,34 @@ async function postSeerrRequest(
       signal: AbortSignal.timeout(10000),
     });
 
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      return {
-        success: false,
-        message: data?.message || `Seerr returned ${response.status}`,
-      };
+    const rawText = await response.text();
+    let data: Record<string, unknown> = {};
+    try {
+      data = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : {};
+    } catch {
+      // non-JSON response body
     }
 
-    return {
-      success: true,
-      message: "Requested",
-      seerrRequestId: typeof data?.id === "number" ? data.id : undefined,
-    };
+    if (!response.ok) {
+      console.error(
+        `[seerr/request] ${response.status} ${response.statusText} — body:`,
+        rawText.slice(0, 500),
+      );
+      const message =
+        (typeof data?.message === "string" && data.message) ||
+        `Seerr returned ${response.status}`;
+      return { success: false, message };
+    }
+
+    const seerrRequestId =
+      typeof data?.id === "number" ? data.id : undefined;
+    console.log(
+      `[seerr/request] OK ${response.status} — request id:`,
+      seerrRequestId ?? "(none)",
+    );
+    return { success: true, message: "Requested", seerrRequestId };
   } catch (error) {
+    console.error("[seerr/request] fetch threw:", error);
     return {
       success: false,
       message: error instanceof Error ? error.message : "Request failed",
@@ -59,7 +78,7 @@ export async function requestTvShow(tmdbId: number): Promise<RequestResult> {
   return postSeerrRequest({
     mediaType: "tv",
     mediaId: tmdbId,
-    seasons: [],
+    seasons: "all",
     is4k: false,
   });
 }

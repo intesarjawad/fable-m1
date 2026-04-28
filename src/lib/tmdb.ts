@@ -1,4 +1,5 @@
 import type { RequestStatus } from "@/src/types/tmdb";
+import type { AvailabilityState } from "@/src/components/media/status-badge";
 
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
 
@@ -60,16 +61,18 @@ export function seerrStatusToRequestStatus(status: number | null | undefined): R
 }
 
 /** Map Seerr's numeric status to the badge label rendered by StatusBadge. */
-export function seerrStatusToBadgeLabel(status: number | null | undefined): string | null {
+export function seerrStatusToBadgeLabel(
+  status: number | null | undefined,
+): AvailabilityState | null {
   switch (status) {
     case SEERR_STATUS.Pending:
       return "Requested";
     case SEERR_STATUS.Processing:
       return "Downloading";
     case SEERR_STATUS.PartiallyAvailable:
-      return "PartiallyCompleted";
+      return "Partial";
     case SEERR_STATUS.Available:
-      return "Completed";
+      return "Available";
     default:
       return null;
   }

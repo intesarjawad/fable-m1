@@ -1,3 +1,5 @@
+import type { AvailabilityState } from "@/src/components/media/status-badge";
+
 // ─── Genre ──────────────────────────────────────────────────────────────────
 
 export interface TmdbGenreDetail {
@@ -216,18 +218,18 @@ export interface TmdbTvDetails {
 
 /**
  * Resolved availability for a movie or show. `state` is the user-facing label
- * (e.g. "Completed", "PartiallyCompleted", "Requested", "Downloading") derived
- * from Seerr's numeric `mediaInfo.status` via `seerrStatusToBadgeLabel`.
+ * (Available, Partial, Requested, Downloading) derived from Seerr's numeric
+ * `mediaInfo.status` via `seerrStatusToBadgeLabel`.
  */
 export interface MediaAvailability {
-  state: string;
+  state: AvailabilityState;
   rawStatus: number;
   seasons?: MediaSeasonAvailability[];
 }
 
 export interface MediaSeasonAvailability {
   season_number: number;
-  state: string;
+  state: AvailabilityState;
   rawStatus: number;
 }
 

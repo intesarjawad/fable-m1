@@ -1094,7 +1094,7 @@ export default function MediaDetailPage() {
                               ? `${episode.runtime} min`
                               : undefined
                           }
-                          state={inJellyfin ? "Completed" : undefined}
+                          isAvailable={inJellyfin}
                           overview={episode.overview}
                           className="h-full transition-transform duration-300 group-hover:scale-[1.01] group-hover:shadow-lg"
                         />

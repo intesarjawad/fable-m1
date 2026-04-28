@@ -17,7 +17,6 @@ import { usePlayback } from "@/src/hooks/usePlayback";
 import { HeroCarousel } from "@/src/components/media/hero-carousel";
 import { MediaCarousel, MediaCarouselSlide } from "@/src/components/media/media-carousel";
 import { PortraitCard, PortraitCardSkeleton } from "@/src/components/media/portrait-card";
-import { StatusBadge } from "@/src/components/media/status-badge";
 import { TogglePill } from "@/src/components/media/toggle-pill";
 import { MediaLink } from "@/src/components/media/media-link";
 import { LazyRow } from "@/src/components/home/lazy-row";
@@ -78,7 +77,6 @@ interface LibraryItem {
   media_type: string;
   year?: number | string;
   indexer?: string;
-  state?: string | null;
 }
 
 interface ResumeItem {
@@ -425,7 +423,6 @@ export default function HomePage() {
                               subtitle={item.year ? `${mediaLabel} \u2022 ${item.year}` : mediaLabel}
                               posterUrl={item.poster_path}
                               className="w-36"
-                              topRight={item.state ? <StatusBadge state={item.state} /> : undefined}
                             />
                           </MediaLink>
                         </MediaCarouselSlide>

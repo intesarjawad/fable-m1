@@ -1,7 +1,6 @@
 import { Mountain } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { OptimizedImage } from "@/src/components/optimized-image";
-import { StatusBadge } from "./status-badge";
 
 interface EpisodeCardProps {
   title: string;
@@ -9,7 +8,7 @@ interface EpisodeCardProps {
   stillUrl?: string | null;
   airedDate?: string | null;
   runtime?: string | null;
-  state?: string;
+  isAvailable?: boolean;
   overview?: string | null;
   onClick?: () => void;
   className?: string;
@@ -21,7 +20,7 @@ export function EpisodeCard({
   stillUrl,
   airedDate,
   runtime,
-  state,
+  isAvailable,
   overview,
   onClick,
   className,
@@ -55,10 +54,10 @@ export function EpisodeCard({
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent opacity-90 transition-opacity duration-500 group-hover:opacity-100" />
         <div className="from-primary/20 absolute inset-0 bg-gradient-to-t via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
 
-        {/* Status badge in top-right */}
-        {state && (
-          <div className="absolute top-2 right-2 z-10">
-            <StatusBadge state={state} />
+        {/* Availability indicator — small green dot when this episode is in the library */}
+        {isAvailable && (
+          <div className="absolute top-2 right-2 z-10" aria-label="Available to watch">
+            <span className="block h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_2px_rgba(0,0,0,0.45)]" />
           </div>
         )}
 

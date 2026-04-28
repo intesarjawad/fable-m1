@@ -18,7 +18,6 @@ interface LibraryResponseItem {
   media_type: "movie" | "tv";
   year: number | string;
   jellyfin_id: string;
-  state: string | null;
 }
 
 const SORT_MAP: Record<
@@ -130,7 +129,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         media_type: item.Type === BaseItemKind.Series ? "tv" : "movie",
         year: item.ProductionYear ?? "N/A",
         jellyfin_id: item.Id ?? "",
-        state: null,
       };
     });
 

@@ -61,21 +61,20 @@ export function DiscoverySection({
 
   const handleRequestMovie = useCallback(
     async (movie: TmdbMovie) => {
-      const tracked: TrackedRequest = {
+      const result = await requestMovie(movie.id);
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+      addRequest({
         tmdbId: movie.id,
         mediaType: "movie",
         title: movie.title,
         posterPath: movie.poster_path,
         requestedAt: new Date().toISOString(),
         status: "requested",
-      };
-      addRequest(tracked);
+      });
       toast.success(`${movie.title} requested`);
-
-      const result = await requestMovie(movie.id);
-      if (!result.success) {
-        toast.error(result.message);
-      }
     },
     [addRequest]
   );

@@ -4,7 +4,6 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Search, Film, Tv } from "lucide-react";
 import { PortraitCard, PortraitCardSkeleton, MediaLink } from "@/src/components/media";
-import { StatusBadge } from "@/src/components/media/status-badge";
 import { tmdbPosterUrl } from "@/src/lib/tmdb";
 import { cn } from "@/src/lib/utils";
 
@@ -18,7 +17,6 @@ interface LibraryItem {
   year: number | string;
   indexer: "tmdb" | "tvdb" | string;
   jellyfin_id: string;
-  state: string | null;
 }
 
 interface LibraryApiResponse {
@@ -353,7 +351,6 @@ function LibraryInner() {
                       title={item.title}
                       subtitle={String(item.year)}
                       posterUrl={resolvePosterUrl(item.poster_path)}
-                      topRight={item.state ? <StatusBadge state={item.state} /> : undefined}
                     />
                   </MediaLink>
                 </div>
