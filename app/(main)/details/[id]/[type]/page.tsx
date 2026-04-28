@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, Fragment } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { Play, X, Download, Loader2, Heart } from "lucide-react";
+import { Play, X, Download, Loader2, Heart, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 
 import { tmdbPosterUrl, tmdbBackdropUrl, seerrStatusToBadgeLabel, SEERR_STATUS } from "@/src/lib/tmdb";
@@ -29,6 +29,7 @@ import { StatusBadge } from "@/src/components/media/status-badge";
 import { DownloadProgress } from "@/src/components/media/download-progress";
 import { EpisodeCard } from "@/src/components/media/episode-card";
 import { MediaLink } from "@/src/components/media/media-link";
+import { ReportIssueDialog } from "@/src/components/media/report-issue-dialog";
 
 import {
   fetchMovieDetails,
@@ -286,6 +287,7 @@ export default function MediaDetailPage() {
   const [requestingMovie, setRequestingMovie] = useState(false);
   const [requestingTvShow, setRequestingTvShow] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [issueDialogOpen, setIssueDialogOpen] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
 
   // Episode sheet state
@@ -978,6 +980,19 @@ export default function MediaDetailPage() {
                     Request More
                   </Button>
                 )}
+
+                {/* Report issue — visible whenever the title exists in Seerr's tracking. */}
+                {availability?.seerrMediaId !== undefined && (
+                  <Button
+                    variant="ghost"
+                    size="default"
+                    onClick={() => setIssueDialogOpen(true)}
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted/50 px-4"
+                  >
+                    <MessageSquare className="mr-1.5 h-4 w-4" />
+                    Report issue
+                  </Button>
+                )}
               </div>
 
               {/* Metadata line */}
@@ -1227,6 +1242,15 @@ export default function MediaDetailPage() {
         onPlay={episodeJellyfinId ? handleEpisodePlay : undefined}
         isMobile={isMobile}
       />
+
+      {availability?.seerrMediaId !== undefined && (
+        <ReportIssueDialog
+          isOpen={issueDialogOpen}
+          onClose={() => setIssueDialogOpen(false)}
+          mediaId={availability.seerrMediaId}
+          title={title}
+        />
+      )}
     </div>
   );
 }

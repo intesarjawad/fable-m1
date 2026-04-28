@@ -191,6 +191,71 @@ export async function fetchSeerrRequests(params: {
   return seerrGet<SeerrRequestList>(`/request?${search.toString()}`);
 }
 
+export type SeerrIssueType = 1 | 2 | 3 | 4; // 1=Video, 2=Audio, 3=Subtitle, 4=Other
+
+export async function submitSeerrIssue(input: {
+  mediaId: number;
+  issueType: SeerrIssueType;
+  message: string;
+  problemSeason?: number;
+  problemEpisode?: number;
+}): Promise<{ success: boolean; message?: string; issueId?: number }> {
+  const config = await resolveSeerrConfig();
+  if (!config) {
+    console.error("[seerr/issue] Seerr is not configured");
+    return { success: false, message: "Seerr is not configured" };
+  }
+
+  const body: Record<string, unknown> = {
+    mediaId: input.mediaId,
+    issueType: input.issueType,
+    message: input.message,
+  };
+  if (typeof input.problemSeason === "number") body.problemSeason = input.problemSeason;
+  if (typeof input.problemEpisode === "number") body.problemEpisode = input.problemEpisode;
+
+  const url = `${config.apiUrl}/issue`;
+  console.log("[seerr/issue] POST", url, JSON.stringify(body));
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "X-Api-Key": config.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
+    });
+    const rawText = await res.text();
+    let data: Record<string, unknown> = {};
+    try {
+      data = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : {};
+    } catch {
+      // non-JSON body
+    }
+    if (!res.ok) {
+      console.error(
+        `[seerr/issue] ${res.status} ${res.statusText} — body:`,
+        rawText.slice(0, 500),
+      );
+      const message =
+        (typeof data?.message === "string" && data.message) ||
+        `Seerr returned ${res.status}`;
+      return { success: false, message };
+    }
+    const issueId = typeof data?.id === "number" ? data.id : undefined;
+    console.log(`[seerr/issue] OK ${res.status} — issue id:`, issueId ?? "(none)");
+    return { success: true, issueId };
+  } catch (error) {
+    console.error("[seerr/issue] fetch threw:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Issue submission failed",
+    };
+  }
+}
+
 export async function cancelSeerrRequest(
   requestId: number,
 ): Promise<{ success: boolean; message?: string }> {
