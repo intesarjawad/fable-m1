@@ -137,3 +137,89 @@ export async function fetchSeerrTvInfo(
   const seasons = data.mediaInfo?.seasons ?? [];
   return { mediaInfo: data.mediaInfo, seasons };
 }
+
+export interface SeerrRequestCount {
+  total: number;
+  movie: number;
+  tv: number;
+  pending: number;
+  approved: number;
+  declined: number;
+  processing: number;
+  available: number;
+}
+
+export async function fetchSeerrRequestCount(): Promise<SeerrRequestCount | null> {
+  return seerrGet<SeerrRequestCount>("/request/count");
+}
+
+export interface SeerrRequestListItem {
+  id: number;
+  status: number;
+  createdAt: string;
+  updatedAt: string;
+  type: "movie" | "tv";
+  is4k: boolean;
+  media: {
+    id: number;
+    tmdbId: number;
+    tvdbId?: number;
+    mediaType: "movie" | "tv";
+    status: number;
+    downloadStatus?: SeerrDownloadStatus[];
+  };
+  requestedBy?: { id: number; displayName?: string };
+  seasons?: { seasonNumber: number; status: number }[];
+}
+
+export interface SeerrRequestList {
+  pageInfo: { pages: number; pageSize: number; results: number; page: number };
+  results: SeerrRequestListItem[];
+}
+
+export async function fetchSeerrRequests(params: {
+  filter?: "all" | "available" | "pending" | "approved" | "processing" | "unavailable";
+  sort?: "added" | "modified" | "mediaAdded";
+  take?: number;
+  skip?: number;
+} = {}): Promise<SeerrRequestList | null> {
+  const search = new URLSearchParams();
+  search.set("take", String(params.take ?? 20));
+  search.set("skip", String(params.skip ?? 0));
+  search.set("filter", params.filter ?? "all");
+  search.set("sort", params.sort ?? "added");
+  return seerrGet<SeerrRequestList>(`/request?${search.toString()}`);
+}
+
+export async function cancelSeerrRequest(
+  requestId: number,
+): Promise<{ success: boolean; message?: string }> {
+  const config = await resolveSeerrConfig();
+  if (!config) {
+    console.error("[seerr/cancel] Seerr is not configured");
+    return { success: false, message: "Seerr is not configured" };
+  }
+
+  const url = `${config.apiUrl}/request/${requestId}`;
+  console.log("[seerr/cancel] DELETE", url);
+  try {
+    const res = await fetch(url, {
+      method: "DELETE",
+      headers: { "X-Api-Key": config.apiKey },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.status === 204 || res.ok) {
+      console.log(`[seerr/cancel] OK ${res.status}`);
+      return { success: true };
+    }
+    const body = await res.text().catch(() => "");
+    console.error(`[seerr/cancel] ${res.status} ${res.statusText} — ${body.slice(0, 300)}`);
+    return { success: false, message: `Seerr returned ${res.status}` };
+  } catch (error) {
+    console.error("[seerr/cancel] fetch threw:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Cancel failed",
+    };
+  }
+}

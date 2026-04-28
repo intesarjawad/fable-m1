@@ -55,6 +55,7 @@ import {
   Signal,
   FastForward,
   Search,
+  Inbox,
 } from "lucide-react";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { useSyncPlay } from "@/src/contexts/syncplay-context";
@@ -143,6 +144,30 @@ export function AppSidebar() {
   const isAdmin = Boolean(user?.Policy?.IsAdministrator);
   const { isInGroup, availableGroups } = useSyncPlay();
   const hasActiveParties = availableGroups.length > 0;
+  const [pendingRequestCount, setPendingRequestCount] = useState<number>(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/seerr/request/count", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        const pendingPlusProcessing =
+          (Number(json?.pending) || 0) + (Number(json?.processing) || 0);
+        setPendingRequestCount(pendingPlusProcessing);
+      } catch {
+        // silent — Seerr might not be configured; sidebar just hides the pill
+      }
+    };
+    load();
+    const interval = setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -333,6 +358,20 @@ export function AppSidebar() {
                   <Link href="/calendar" onClick={() => setOpenMobile(false)}>
                     <CalendarDays className="h-4 w-4" />
                     <span>Calendar</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link href="/requests" onClick={() => setOpenMobile(false)}>
+                    <Inbox className="h-4 w-4" />
+                    <span>Requests</span>
+                    {pendingRequestCount > 0 && (
+                      <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500/20 px-1.5 text-[11px] font-semibold tabular-nums text-amber-200 ring-1 ring-amber-500/40">
+                        {pendingRequestCount > 99 ? "99+" : pendingRequestCount}
+                      </span>
+                    )}
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
