@@ -1,6 +1,21 @@
 "use server";
 
 import { getAuthData } from "./media";
+import { getDeviceId } from "../lib/device-id";
+
+const CLIENT_NAME = "Fable";
+const CLIENT_VERSION = "1.0.0";
+const DEVICE_NAME = "Fable Web Client";
+
+function buildAuthorizationHeader(accessToken: string): string {
+  return [
+    `MediaBrowser Client="${CLIENT_NAME}"`,
+    `Device="${DEVICE_NAME}"`,
+    `DeviceId="${getDeviceId()}"`,
+    `Version="${CLIENT_VERSION}"`,
+    `Token="${accessToken}"`,
+  ].join(", ");
+}
 
 export interface CastTarget {
   sessionId: string;
@@ -61,6 +76,7 @@ export async function listCastTargets(): Promise<{
     const res = await fetch(url, {
       method: "GET",
       headers: {
+        "X-Emby-Authorization": buildAuthorizationHeader(auth.accessToken),
         "X-Emby-Token": auth.accessToken,
         Accept: "application/json",
       },
@@ -129,8 +145,9 @@ export async function castPlayNow(input: {
     const res = await fetch(url, {
       method: "POST",
       headers: {
+        "X-Emby-Authorization": buildAuthorizationHeader(auth.accessToken),
         "X-Emby-Token": auth.accessToken,
-        "Content-Length": "0",
+        Accept: "application/json",
       },
       signal: AbortSignal.timeout(10000),
     });
